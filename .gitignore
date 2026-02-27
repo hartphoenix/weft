@@ -1,0 +1,12 @@
+node_modules/
+.env
+.DS_Store
+
+# Learner profile (personal, not shared)
+learning/*
+!learning/.gitkeep
+!learning/session-logs/
+learning/session-logs/*
+!learning/session-logs/.gitkeep
+background/*
+!background/.gitkeep
