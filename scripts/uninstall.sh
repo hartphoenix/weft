@@ -42,13 +42,13 @@ if [ -f "$SETTINGS_FILE" ]; then
 
   # Remove session-start hook
   HOOK_CMD="bash $HARNESS_ROOT/.claude/hooks/session-start.sh"
-  EXISTING_HOOKS=$(jq -r '.hooks.SessionStart // [] | .[].command // empty' "$SETTINGS_FILE" 2>/dev/null || true)
+  EXISTING_HOOKS=$(jq -r '.hooks.SessionStart // [] | .[].hooks[]?.command // empty' "$SETTINGS_FILE" 2>/dev/null || true)
 
   if echo "$EXISTING_HOOKS" | grep -qF "$HOOK_CMD"; then
     jq --arg cmd "$HOOK_CMD" '
-      .hooks.SessionStart = (
-        [.hooks.SessionStart[] | select(.command != $cmd)]
-      )
+      .hooks.SessionStart = [
+        .hooks.SessionStart[] | select(.hooks | any(.command == $cmd) | not)
+      ]
     ' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
     echo "✓ Removed session-start hook from settings.json"
   else

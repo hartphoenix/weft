@@ -103,13 +103,16 @@ fi
 
 # Add session-start hook (idempotent)
 HOOK_CMD="bash $HOOKS_DIR/session-start.sh"
-EXISTING_HOOKS=$(jq -r '.hooks.SessionStart // [] | .[].command // empty' "$SETTINGS_FILE" 2>/dev/null || true)
+EXISTING_HOOKS=$(jq -r '.hooks.SessionStart // [] | .[].hooks[]?.command // empty' "$SETTINGS_FILE" 2>/dev/null || true)
 if ! echo "$EXISTING_HOOKS" | grep -qF "$HOOK_CMD"; then
   jq --arg cmd "$HOOK_CMD" '
     .hooks.SessionStart = (
       (.hooks.SessionStart // []) + [{
-        type: "command",
-        command: $cmd
+        matcher: "",
+        hooks: [{
+          type: "command",
+          command: $cmd
+        }]
       }]
     )
   ' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
