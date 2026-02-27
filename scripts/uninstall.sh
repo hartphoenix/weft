@@ -9,9 +9,10 @@ set -euo pipefail
 CONFIG_DIR="$HOME/.config/weft"
 MANIFEST_FILE="$CONFIG_DIR/manifest.json"
 SETTINGS_FILE="$HOME/.claude/settings.json"
-CLAUDE_MD="$HOME/.claude/CLAUDE.md"
+CLAUDE_DIR="$HOME/.claude"
+CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
 
-# ── Check for manifest ────────────────────────────────────────────────
+# ── Check for manifest ───────────────────────────────────────────────
 
 if [ ! -f "$MANIFEST_FILE" ]; then
   echo "No weft installation found (no manifest at $MANIFEST_FILE)."
@@ -20,27 +21,53 @@ if [ ! -f "$MANIFEST_FILE" ]; then
 fi
 
 HARNESS_ROOT=$(jq -r '.harness_root' "$MANIFEST_FILE")
+SKILLS_DIR="$HARNESS_ROOT/.claude/skills"
 echo "Uninstalling weft harness (root: $HARNESS_ROOT)"
 echo ""
 
-# ── Remove skills entry from settings.json ────────────────────────────
+# ── Remove skill symlinks ────────────────────────────────────────────
+
+REMOVED=0
+for name in $(jq -r '.symlinks[]' "$MANIFEST_FILE" 2>/dev/null); do
+  link="$CLAUDE_DIR/skills/$name"
+  if [ -L "$link" ]; then
+    existing=$(readlink "$link")
+    if [ "$existing" = "$SKILLS_DIR/$name/" ] || [ "$existing" = "$SKILLS_DIR/$name" ]; then
+      rm "$link"
+      echo "✓ Removed $name"
+      REMOVED=$((REMOVED + 1))
+    else
+      echo "  Skipping $name — symlink points elsewhere"
+    fi
+  elif [ -e "$link" ]; then
+    echo "  Skipping $name — not a symlink"
+  else
+    echo "  $name already gone — skipping"
+  fi
+done
+
+# ── Remove harness from additionalDirectories ────────────────────────
 
 if [ -f "$SETTINGS_FILE" ]; then
   EXISTING=$(jq -r '.permissions.additionalDirectories // [] | .[]' "$SETTINGS_FILE" 2>/dev/null || true)
-
   if echo "$EXISTING" | grep -qF "$HARNESS_ROOT"; then
     jq --arg dir "$HARNESS_ROOT" '
       .permissions.additionalDirectories = (
         [.permissions.additionalDirectories[] | select(. != $dir)]
       )
     ' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
-    echo "✓ Removed harness from settings.json"
+    echo "✓ Removed harness from additionalDirectories"
   else
-    echo "  Harness root not found in settings.json — skipping"
+    echo "  Harness not found in additionalDirectories — skipping"
   fi
+else
+  echo "  settings.json not found — skipping additionalDirectories"
+fi
 
-  # Remove session-start hook
-  HOOK_CMD="bash $HARNESS_ROOT/.claude/hooks/session-start.sh"
+# ── Remove session-start hook ────────────────────────────────────────
+
+if [ -f "$SETTINGS_FILE" ]; then
+  HOOK_CMD=$(jq -r '.hook' "$MANIFEST_FILE")
   EXISTING_HOOKS=$(jq -r '.hooks.SessionStart // [] | .[].hooks[]?.command // empty' "$SETTINGS_FILE" 2>/dev/null || true)
 
   if echo "$EXISTING_HOOKS" | grep -qF "$HOOK_CMD"; then
@@ -49,40 +76,22 @@ if [ -f "$SETTINGS_FILE" ]; then
         .hooks.SessionStart[] | select(.hooks | any(.command == $cmd) | not)
       ]
     ' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
-    echo "✓ Removed session-start hook from settings.json"
+    echo "✓ Removed session-start hook"
   else
-    echo "  Session-start hook not found in settings.json — skipping"
-  fi
-  # Also clean up any stale maestro entries
-  MAESTRO_FOUND=false
-  if jq -e '.permissions.additionalDirectories[]? | select(contains("/maestro/"))' "$SETTINGS_FILE" &>/dev/null; then
-    jq '.permissions.additionalDirectories = [
-      .permissions.additionalDirectories[] | select(contains("/maestro/") | not)
-    ]' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
-    MAESTRO_FOUND=true
-  fi
-  if jq -e '.hooks.SessionStart[]? | select(.command // "" | contains("/maestro/"))' "$SETTINGS_FILE" &>/dev/null; then
-    jq '.hooks.SessionStart = [
-      .hooks.SessionStart[] | select(.command // "" | contains("/maestro/") | not)
-    ]' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
-    MAESTRO_FOUND=true
-  fi
-  if [ "$MAESTRO_FOUND" = true ]; then
-    echo "✓ Removed stale maestro entries from settings.json"
+    echo "  Session-start hook not found — skipping"
   fi
 else
-  echo "  settings.json not found — skipping"
+  echo "  settings.json not found — skipping hook"
 fi
 
-# ── Remove weft section from CLAUDE.md ─────────────────────────────
+# ── Remove CLAUDE.md section ────────────────────────────────────────
 
 if [ -f "$CLAUDE_MD" ]; then
   if grep -q '<!-- weft:start -->' "$CLAUDE_MD"; then
     START_COUNT=$(grep -c '<!-- weft:start -->' "$CLAUDE_MD" || true)
     END_COUNT=$(grep -c '<!-- weft:end -->' "$CLAUDE_MD" || true)
     if [ "$START_COUNT" -ne 1 ] || [ "$END_COUNT" -ne 1 ]; then
-      echo "Warning: CLAUDE.md has malformed weft markers (start=$START_COUNT, end=$END_COUNT)."
-      echo "  Skipping marker-based removal. Check the file manually."
+      echo "Warning: CLAUDE.md has malformed weft markers — skipping"
     else
       awk '
         /<!-- weft:start -->/ { skip=1; next }
@@ -90,10 +99,9 @@ if [ -f "$CLAUDE_MD" ]; then
         !skip { print }
       ' "$CLAUDE_MD" > "$CLAUDE_MD.tmp"
 
-      # Trim trailing blank lines left after section removal
+      # Trim trailing blank lines
       printf '%s\n' "$(cat "$CLAUDE_MD.tmp")" > "$CLAUDE_MD.tmp"
 
-      # Check if the file is now effectively empty (only whitespace)
       if [ -z "$(tr -d '[:space:]' < "$CLAUDE_MD.tmp")" ]; then
         rm "$CLAUDE_MD" "$CLAUDE_MD.tmp"
         echo "✓ Deleted CLAUDE.md (was weft-only content)"
@@ -103,49 +111,40 @@ if [ -f "$CLAUDE_MD" ]; then
       fi
     fi
   else
-    echo "  No weft section found in CLAUDE.md — skipping"
+    echo "  No weft section in CLAUDE.md — skipping"
   fi
 else
   echo "  CLAUDE.md not found — skipping"
 fi
 
-# ── Preserve learning state (warn, never delete) ─────────────────────
+# ── Preserve learning state ──────────────────────────────────────────
 
 LEARNING_DIR="$HARNESS_ROOT/learning"
 if [ -d "$LEARNING_DIR" ]; then
   echo ""
-  echo "⚠  Learning state at $LEARNING_DIR/ has NOT been deleted."
-  echo "   Remove it manually if you want a clean uninstall:"
-  echo "   rm -rf $LEARNING_DIR"
+  echo "Note: Learning state at $LEARNING_DIR/ has NOT been deleted."
+  echo "  Remove manually if you want a clean uninstall:"
+  echo "  rm -rf $LEARNING_DIR"
 fi
 
-# ── Print summary with backup paths ──────────────────────────────────
+# ── Summary and cleanup ─────────────────────────────────────────────
 
 echo ""
 echo "────────────────────────────────────────────────────"
 echo "  Weft harness uninstalled"
 echo "────────────────────────────────────────────────────"
 echo ""
-echo "  Backups (available until config dir is removed):"
 
 BACKUP_DIR="$CONFIG_DIR/backups"
 if [ -d "$BACKUP_DIR" ]; then
+  echo "  Backups (will be removed with config dir):"
   for f in "$BACKUP_DIR"/*; do
     [ -f "$f" ] && echo "    $f"
   done
-else
-  echo "    (no backups found)"
+  echo ""
 fi
 
-echo ""
-echo "  To restore a backup, copy it to its original location."
-echo "  Example: cp $BACKUP_DIR/settings.json.* ~/.claude/settings.json"
-echo ""
-
-# ── Remove config directory ───────────────────────────────────────────
-
-echo "Removing $CONFIG_DIR/ ..."
 rm -rf "$CONFIG_DIR"
-echo "✓ Config directory removed"
+echo "✓ Removed $CONFIG_DIR/"
 echo ""
-echo "Done. Skills are no longer globally registered."
+echo "Done. $REMOVED skill symlinks removed."

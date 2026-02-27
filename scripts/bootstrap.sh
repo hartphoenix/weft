@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Weft harness installer.
-# Registers skills globally, writes path resolution to ~/.claude/CLAUDE.md,
-# and records everything in a manifest for clean uninstall.
+# Symlinks skills into ~/.claude/skills/, registers directory permissions,
+# writes path resolution to ~/.claude/CLAUDE.md, and records everything
+# in a manifest for clean uninstall.
 #
 # Usage: bash scripts/bootstrap.sh  (run from the weft repo root)
 
@@ -35,22 +36,18 @@ CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
 MANIFEST_FILE="$CONFIG_DIR/manifest.json"
 TIMESTAMP=$(date +%s)
 
-# Verify the skills directory exists (sanity check)
 if [ ! -d "$SKILLS_DIR" ]; then
   echo "Error: Skills directory not found at $SKILLS_DIR"
   echo "Are you running this from the weft repo root?"
   exit 1
 fi
 
-# ── Setup config directory ────────────────────────────────────────────
+# ── Config directory ──────────────────────────────────────────────────
 
 mkdir -p "$BACKUP_DIR"
 echo "$HARNESS_ROOT" > "$CONFIG_DIR/root"
 
-# Start building the manifest
-CHANGES='[]'
-
-# ── Backup and update settings.json ───────────────────────────────────
+# ── Backup existing files ────────────────────────────────────────────
 
 mkdir -p "$CLAUDE_DIR"
 
@@ -62,27 +59,101 @@ else
   SETTINGS_BACKUP="(created)"
 fi
 
-# ── Migrate stale maestro entries ────────────────────────────────────
-
-# Remove any additionalDirectories containing /maestro/
-if jq -e '.permissions.additionalDirectories[]? | select(contains("/maestro/"))' "$SETTINGS_FILE" &>/dev/null; then
-  jq '.permissions.additionalDirectories = [
-    .permissions.additionalDirectories[] | select(contains("/maestro/") | not)
-  ]' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
-  echo "✓ Removed stale maestro entries from additionalDirectories"
+CLAUDE_MD_BACKUP="$BACKUP_DIR/CLAUDE.md.$TIMESTAMP"
+if [ -f "$CLAUDE_MD" ]; then
+  cp "$CLAUDE_MD" "$CLAUDE_MD_BACKUP"
+else
+  CLAUDE_MD_BACKUP="(none)"
 fi
 
-# Remove any SessionStart hooks containing /maestro/
-if jq -e '.hooks.SessionStart[]? | select(.command // "" | contains("/maestro/"))' "$SETTINGS_FILE" &>/dev/null; then
-  jq '.hooks.SessionStart = [
-    .hooks.SessionStart[] | select(.command // "" | contains("/maestro/") | not)
-  ]' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
-  echo "✓ Removed stale maestro hook from SessionStart"
+# ── Symlink skills ───────────────────────────────────────────────────
+
+mkdir -p "$CLAUDE_DIR/skills"
+
+SYMLINKED=""
+SKIPPED=""
+
+for skill_dir in "$SKILLS_DIR"/*/; do
+  [ -d "$skill_dir" ] || continue
+  name=$(basename "$skill_dir")
+  link="$CLAUDE_DIR/skills/$name"
+
+  if [ -L "$link" ]; then
+    existing=$(readlink "$link")
+    if [ "$existing" = "$skill_dir" ] || [ "$existing" = "${skill_dir%/}" ]; then
+      echo "  $name already linked — skipping"
+      SYMLINKED="${SYMLINKED:+$SYMLINKED }$name"
+      continue
+    fi
+  fi
+
+  if [ -e "$link" ]; then
+    echo "  Warning: ~/.claude/skills/$name already exists — skipping"
+    SKIPPED="${SKIPPED:+$SKIPPED }$name"
+    continue
+  fi
+
+  ln -s "$skill_dir" "$link"
+  SYMLINKED="${SYMLINKED:+$SYMLINKED }$name"
+  echo "✓ Linked $name"
+done
+
+# ── Resolve skill name collisions ────────────────────────────────────
+
+if [ -n "$SKIPPED" ]; then
+  # Guard: only offer rename once per invocation chain
+  if [ "${WEFT_RETRY:-}" = "1" ]; then
+    echo ""
+    echo "Some skills still have conflicts after rename attempt."
+    echo "Please resolve manually, then re-run bootstrap."
+  else
+    echo ""
+    echo "These weft skills were skipped due to name conflicts:"
+    echo ""
+    for name in $SKIPPED; do
+      desc=$(sed -n 's/^description: *//p' "$CLAUDE_DIR/skills/$name/SKILL.md" 2>/dev/null | head -1)
+      echo "  $name — ${desc:-(no description found)}"
+    done
+    echo ""
+    echo "Weft includes skills with these names. To install them, the"
+    echo "existing skills need to be renamed."
+    echo ""
+    read -rp "Let Claude rename the conflicting skills? [y/N] " answer
+    if [[ "$answer" =~ ^[Yy] ]]; then
+      SKILL_LIST=""
+      for name in $SKIPPED; do
+        SKILL_LIST="${SKILL_LIST:+$SKILL_LIST, }$HOME/.claude/skills/$name/"
+      done
+
+      echo ""
+      echo "Asking Claude to rename conflicting skills..."
+      echo ""
+
+      claude -p "I need to rename existing skills to make room for weft skills with the same names. For each skill directory listed below:
+
+1. Read its SKILL.md to understand what the skill does
+2. Choose a new name that reflects its purpose and avoids the original name
+3. Rename the directory (mv ~/.claude/skills/oldname ~/.claude/skills/newname)
+4. Report what you renamed and why
+
+Skill directories to rename: $SKILL_LIST
+
+After renaming, briefly explain what each skill does so the user knows how to invoke it under its new name."
+
+      echo ""
+      echo "Re-running bootstrap to link the freed names..."
+      echo ""
+      WEFT_RETRY=1 exec bash "$0"
+    fi
+  fi
 fi
 
-# Add harness root to additionalDirectories (idempotent)
-# Claude Code auto-discovers skills from .claude/skills/ within add-dir directories.
-# Register the repo root, not the skills subdirectory.
+# ── Register directory permissions ───────────────────────────────────
+# additionalDirectories grants the agent permission to read/write
+# harness files (learning state, references, background) when working
+# from a different project directory. Symlinks handle skill discovery;
+# this handles file access.
+
 EXISTING=$(jq -r '.permissions.additionalDirectories // [] | .[]' "$SETTINGS_FILE" 2>/dev/null || true)
 if ! echo "$EXISTING" | grep -qF "$HARNESS_ROOT"; then
   jq --arg dir "$HARNESS_ROOT" '
@@ -90,20 +161,13 @@ if ! echo "$EXISTING" | grep -qF "$HARNESS_ROOT"; then
       (.permissions.additionalDirectories // []) + [$dir]
     )
   ' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
-
-  CHANGES=$(echo "$CHANGES" | jq --arg file "$SETTINGS_FILE" --arg val "$HARNESS_ROOT" --arg bak "$SETTINGS_BACKUP" '. + [{
-    file: $file,
-    action: "added_to_array",
-    key: "permissions.additionalDirectories",
-    value: $val,
-    backup: $bak
-  }]')
-  echo "✓ Registered harness in settings.json"
+  echo "✓ Registered harness directory permissions"
 else
-  echo "  Harness root already registered — skipping"
+  echo "  Directory permissions already registered — skipping"
 fi
 
-# Add session-start hook (idempotent)
+# ── Register session-start hook ──────────────────────────────────────
+
 HOOK_CMD="bash $HOOKS_DIR/session-start.sh"
 EXISTING_HOOKS=$(jq -r '.hooks.SessionStart // [] | .[].hooks[]?.command // empty' "$SETTINGS_FILE" 2>/dev/null || true)
 if ! echo "$EXISTING_HOOKS" | grep -qF "$HOOK_CMD"; then
@@ -118,23 +182,12 @@ if ! echo "$EXISTING_HOOKS" | grep -qF "$HOOK_CMD"; then
       }]
     )
   ' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
-
-  CHANGES=$(echo "$CHANGES" | jq --arg file "$SETTINGS_FILE" --arg val "$HOOK_CMD" --arg bak "$SETTINGS_BACKUP" '. + [{
-    file: $file,
-    action: "added_to_array",
-    key: "hooks.SessionStart",
-    value: $val,
-    backup: $bak
-  }]')
-  echo "✓ Registered session-start hook in settings.json"
+  echo "✓ Registered session-start hook"
 else
   echo "  Session-start hook already registered — skipping"
 fi
 
-# ── Backup and write CLAUDE.md section ────────────────────────────────
-
-CLAUDE_MD_ACTION=""
-CLAUDE_MD_BACKUP="$BACKUP_DIR/CLAUDE.md.$TIMESTAMP"
+# ── Write CLAUDE.md section ──────────────────────────────────────────
 
 SECTION=$(cat <<SECTION_EOF
 <!-- weft:start -->
@@ -158,7 +211,7 @@ When a skill says "read learning/current-state.md", read
 
 ### Architecture
 
-Skills: \`$HARNESS_ROOT/.claude/skills/\` (registered globally)
+Skills: \`$HARNESS_ROOT/.claude/skills/\` (symlinked globally)
 References: \`$HARNESS_ROOT/.claude/references/\`
 Learning state: \`$HARNESS_ROOT/learning/\`
 Background materials: \`$HARNESS_ROOT/background/\`
@@ -166,11 +219,9 @@ Background materials: \`$HARNESS_ROOT/background/\`
 SECTION_EOF
 )
 
+CLAUDE_MD_ACTION=""
 if [ -f "$CLAUDE_MD" ]; then
-  cp "$CLAUDE_MD" "$CLAUDE_MD_BACKUP"
-
   if grep -q '<!-- weft:start -->' "$CLAUDE_MD"; then
-    # Verify matched marker pair before replacing
     START_COUNT=$(grep -c '<!-- weft:start -->' "$CLAUDE_MD" || true)
     END_COUNT=$(grep -c '<!-- weft:end -->' "$CLAUDE_MD" || true)
     if [ "$START_COUNT" -ne 1 ] || [ "$END_COUNT" -ne 1 ]; then
@@ -179,7 +230,6 @@ if [ -f "$CLAUDE_MD" ]; then
       exit 1
     fi
 
-    # Update: replace between markers (in place)
     SECTION_TMP=$(mktemp)
     printf '%s\n' "$SECTION" > "$SECTION_TMP"
     awk -v sfile="$SECTION_TMP" '
@@ -193,30 +243,22 @@ if [ -f "$CLAUDE_MD" ]; then
     ' "$CLAUDE_MD" > "$CLAUDE_MD.tmp"
     rm -f "$SECTION_TMP"
     mv "$CLAUDE_MD.tmp" "$CLAUDE_MD"
-    CLAUDE_MD_ACTION="replaced_section"
+    CLAUDE_MD_ACTION="replaced"
     echo "✓ Updated weft section in CLAUDE.md"
   else
-    # Append section
     printf '\n%s\n' "$SECTION" >> "$CLAUDE_MD"
-    CLAUDE_MD_ACTION="appended_section"
+    CLAUDE_MD_ACTION="appended"
     echo "✓ Appended weft section to CLAUDE.md"
   fi
 else
-  # Create new file
   printf '%s\n' "$SECTION" > "$CLAUDE_MD"
   CLAUDE_MD_ACTION="created"
   CLAUDE_MD_BACKUP="(created)"
   echo "✓ Created CLAUDE.md with weft section"
 fi
 
-CHANGES=$(echo "$CHANGES" | jq --arg file "$CLAUDE_MD" --arg action "$CLAUDE_MD_ACTION" --arg bak "$CLAUDE_MD_BACKUP" '. + [{
-  file: $file,
-  action: $action,
-  markers: ["<!-- weft:start -->", "<!-- weft:end -->"],
-  backup: $bak
-}]')
-
-# ── Write config.json (preserve existing) ─────────────────────────────
+# ── Write config.json (preserve existing) ────────────────────────────
+# The session-start hook reads updates preference from this file.
 
 if [ ! -f "$CONFIG_DIR/config.json" ]; then
   echo '{ "updates": "notify" }' > "$CONFIG_DIR/config.json"
@@ -225,23 +267,48 @@ else
   echo "  config.json already exists — preserving"
 fi
 
-# ── Write manifest ────────────────────────────────────────────────────
-
-jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg root "$HARNESS_ROOT" --argjson changes "$CHANGES" '{
-  installed_at: $ts,
-  harness_root: $root,
-  changes: $changes
-}' > "$MANIFEST_FILE"
-
-echo "✓ Wrote manifest to $MANIFEST_FILE"
-
-# ── Ensure learning and background directories ────────────────────────
+# ── Ensure directories ───────────────────────────────────────────────
 
 mkdir -p "$HARNESS_ROOT/learning/session-logs"
 mkdir -p "$HARNESS_ROOT/background"
-echo "✓ Verified learning/ and background/ directories"
 
-# ── Summary ───────────────────────────────────────────────────────────
+# ── Write manifest ───────────────────────────────────────────────────
+
+# Convert space-delimited lists to JSON arrays
+to_json_array() {
+  if [ -z "$1" ]; then echo '[]'; return; fi
+  echo "$1" | tr ' ' '\n' | jq -R 'select(length > 0)' | jq -s .
+}
+
+SYMLINKED_JSON=$(to_json_array "$SYMLINKED")
+SKIPPED_JSON=$(to_json_array "$SKIPPED")
+
+jq -n \
+  --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --arg root "$HARNESS_ROOT" \
+  --argjson symlinks "$SYMLINKED_JSON" \
+  --argjson skipped "$SKIPPED_JSON" \
+  --arg hook "$HOOK_CMD" \
+  --arg additional_dir "$HARNESS_ROOT" \
+  --arg claude_md "$CLAUDE_MD_ACTION" \
+  --arg settings_backup "$SETTINGS_BACKUP" \
+  --arg claude_md_backup "$CLAUDE_MD_BACKUP" \
+  '{
+    installed_at: $ts,
+    harness_root: $root,
+    symlinks: $symlinks,
+    skipped: $skipped,
+    hook: $hook,
+    additional_directory: $additional_dir,
+    claude_md: $claude_md,
+    settings_backup: $settings_backup,
+    claude_md_backup: $claude_md_backup
+  }' > "$MANIFEST_FILE"
+
+# ── Summary ──────────────────────────────────────────────────────────
+
+SKILL_COUNT=$(echo "$SYMLINKED" | wc -w | tr -d ' ')
+SKIP_COUNT=$(echo "$SKIPPED" | wc -w | tr -d ' ')
 
 echo ""
 echo "════════════════════════════════════════════════════"
@@ -249,13 +316,13 @@ echo "  Weft harness installed"
 echo "════════════════════════════════════════════════════"
 echo ""
 echo "  Harness root:  $HARNESS_ROOT"
-echo "  Skills:        $SKILLS_DIR"
+echo "  Skills linked: $SKILL_COUNT"
+if [ "$SKIP_COUNT" -gt 0 ]; then
+echo "  Skills skipped: $SKIP_COUNT (pre-existing)"
+fi
 echo "  Learning:      $HARNESS_ROOT/learning/"
 echo "  Background:    $HARNESS_ROOT/background/"
-echo "  Backups:       $BACKUP_DIR"
 echo "  Manifest:      $MANIFEST_FILE"
-echo ""
-echo "  Update preference: $(jq -r '.updates' "$CONFIG_DIR/config.json")"
 echo ""
 echo "  Next steps:"
 echo "    1. Start Claude Code in any project directory"
