@@ -26,18 +26,17 @@ echo ""
 # ── Remove skills entry from settings.json ────────────────────────────
 
 if [ -f "$SETTINGS_FILE" ]; then
-  SKILLS_DIR="$HARNESS_ROOT/.claude/skills"
   EXISTING=$(jq -r '.permissions.additionalDirectories // [] | .[]' "$SETTINGS_FILE" 2>/dev/null || true)
 
-  if echo "$EXISTING" | grep -qF "$SKILLS_DIR"; then
-    jq --arg dir "$SKILLS_DIR" '
+  if echo "$EXISTING" | grep -qF "$HARNESS_ROOT"; then
+    jq --arg dir "$HARNESS_ROOT" '
       .permissions.additionalDirectories = (
         [.permissions.additionalDirectories[] | select(. != $dir)]
       )
     ' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
-    echo "✓ Removed skills path from settings.json"
+    echo "✓ Removed harness from settings.json"
   else
-    echo "  Skills path not found in settings.json — skipping"
+    echo "  Harness root not found in settings.json — skipping"
   fi
 
   # Remove session-start hook

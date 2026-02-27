@@ -80,25 +80,27 @@ if jq -e '.hooks.SessionStart[]? | select(.command // "" | contains("/maestro/")
   echo "✓ Removed stale maestro hook from SessionStart"
 fi
 
-# Add skills path to additionalDirectories (idempotent)
+# Add harness root to additionalDirectories (idempotent)
+# Claude Code auto-discovers skills from .claude/skills/ within add-dir directories.
+# Register the repo root, not the skills subdirectory.
 EXISTING=$(jq -r '.permissions.additionalDirectories // [] | .[]' "$SETTINGS_FILE" 2>/dev/null || true)
-if ! echo "$EXISTING" | grep -qF "$SKILLS_DIR"; then
-  jq --arg dir "$SKILLS_DIR" '
+if ! echo "$EXISTING" | grep -qF "$HARNESS_ROOT"; then
+  jq --arg dir "$HARNESS_ROOT" '
     .permissions.additionalDirectories = (
       (.permissions.additionalDirectories // []) + [$dir]
     )
   ' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
 
-  CHANGES=$(echo "$CHANGES" | jq --arg file "$SETTINGS_FILE" --arg val "$SKILLS_DIR" --arg bak "$SETTINGS_BACKUP" '. + [{
+  CHANGES=$(echo "$CHANGES" | jq --arg file "$SETTINGS_FILE" --arg val "$HARNESS_ROOT" --arg bak "$SETTINGS_BACKUP" '. + [{
     file: $file,
     action: "added_to_array",
     key: "permissions.additionalDirectories",
     value: $val,
     backup: $bak
   }]')
-  echo "✓ Registered skills in settings.json"
+  echo "✓ Registered harness in settings.json"
 else
-  echo "  Skills path already registered — skipping"
+  echo "  Harness root already registered — skipping"
 fi
 
 # Add session-start hook (idempotent)
