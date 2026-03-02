@@ -1,5 +1,23 @@
 # Weft Harness
 
+## Don't have Claude Code yet?
+
+If you're starting from scratch, use Claude in the browser to get set up.
+Paste this into a Claude conversation:
+
+```
+I want to set up Claude Code and a personal learning harness called Weft.
+I'm starting from Claude in the browser. Please read the setup guide at
+https://github.com/hartphoenix/weft and walk me through the full
+installation, one step at a time.
+```
+
+Claude will read this README, guide you through installing prerequisites
+and Claude Code, then hand you a short prompt to paste once you're in a
+terminal session.
+
+---
+
 A personal development harness for Claude Code. It learns how you learn,
 tracks your growth, and adapts its behavior to where you are right now.
 
@@ -268,3 +286,55 @@ review needs the profile that intake creates.
 **Update check not working:** Verify your weft directory is a git
 repo with a remote: `cd ~/weft && git remote -v`. The hook fetches
 in the background — it won't block your session.
+
+---
+
+## Setup guide — for Claude
+
+If a user has pointed you here and asked for help setting up Weft, guide
+them through these four steps. Check in after each step before moving on,
+and adapt your instructions to their operating system and what they already
+have installed.
+
+**Step 1 — Prerequisites**
+
+They need these four tools:
+- Node.js 18 or higher
+- GitHub CLI (`gh`), authenticated to their GitHub account
+- `jq` (a JSON command-line tool)
+- `git`
+
+**Step 2 — Install Claude Code**
+
+Once prerequisites are in place:
+
+```
+npm install -g @anthropic-ai/claude-code
+```
+
+**Step 3 — Authenticate Claude Code**
+
+Run `claude` in the terminal for the first time and follow the prompts to
+connect to their Anthropic account.
+
+**Step 4 — Hand off to Claude Code**
+
+Once `claude` is running and they're in a terminal session, tell them to
+paste this prompt:
+
+```
+Please install the Weft learning harness on this machine. Run these commands:
+
+git clone https://github.com/hartphoenix/weft ~/weft
+cd ~/weft && bash scripts/bootstrap.sh
+
+The bootstrap script will register Weft's skills globally and set up a
+session-start hook. It needs these tools already installed: gh
+(authenticated), jq, and git. If any are missing, stop and let me know
+before proceeding.
+
+Once bootstrap completes, let me know what was installed and prompt me to
+run /intake to begin my personalized setup.
+```
+
+Start by asking what operating system they're on.
