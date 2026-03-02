@@ -130,6 +130,28 @@ if [ "$UPDATE_PREF" != "off" ] && [ -d "$WEFT_ROOT/.git" ]; then
   fi
 fi
 
+# ── Unlinked skills check ─────────────────────────────────────────────
+# Detects skills in the harness that exist on disk but aren't symlinked
+# into ~/.claude/skills/. Fires when a git pull brings in a new skill
+# directory that bootstrap hasn't registered yet.
+
+HARNESS_SKILLS_DIR="$WEFT_ROOT/.claude/skills"
+if [ -d "$HARNESS_SKILLS_DIR" ]; then
+  UNLINKED_SKILLS=()
+  for skill_dir in "$HARNESS_SKILLS_DIR"/*/; do
+    [ -d "$skill_dir" ] || continue
+    skill_name=$(basename "$skill_dir")
+    if [ ! -L "$HOME/.claude/skills/$skill_name" ]; then
+      UNLINKED_SKILLS+=("$skill_name")
+    fi
+  done
+  if [ ${#UNLINKED_SKILLS[@]} -gt 0 ]; then
+    SKILL_COUNT=${#UNLINKED_SKILLS[@]}
+    SKILL_NAMES=$(IFS=', '; echo "${UNLINKED_SKILLS[*]}")
+    CONTEXT_PARTS+=("$SKILL_COUNT new weft skill(s) installed but not yet linked: $SKILL_NAMES. Run bootstrap to register them: bash $WEFT_ROOT/scripts/bootstrap.sh")
+  fi
+fi
+
 # ── Emit context ──────────────────────────────────────────────────────
 
 if [ ${#CONTEXT_PARTS[@]} -gt 0 ]; then
