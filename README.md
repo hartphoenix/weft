@@ -21,7 +21,7 @@ terminal session.
 A personal development harness for Claude Code. It learns how you learn,
 tracks your growth, and adapts its behavior to where you are right now.
 
-Drop some materials, run a 15-minute interview, and get a system that
+Drop some materials, run a ~30-minute interview, and get a system that
 sharpens itself every time you use it.
 
 ## Prerequisites
@@ -86,7 +86,7 @@ The intake interview has four phases:
 
 1. **Discover** — scans your background materials (if any) to build a
    starting picture
-2. **Interview** — conversational, ~10-15 minutes. Covers your
+2. **Interview** — conversational, ~30 minutes. Covers your
    background, goals, current skills, how you learn, and how you like
    to work
 3. **Synthesize** — generates your personalized configuration and
