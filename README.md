@@ -101,6 +101,14 @@ Nothing is written without your explicit OK.
 After intake, use Claude Code normally in any project. The harness works
 in the background. See **The learning loop** below.
 
+To get oriented to the harness tools, run the getting-started guide through
+lesson-scaffold — it adapts the lesson to your intake profile. You may want
+to `/clear` first to start a fresh session:
+
+```
+/lesson-scaffold guides/getting-started.md
+```
+
 ## The learning loop
 
 The harness improves your profile every time you use it. Here's the

@@ -611,6 +611,13 @@ After writing, summarize:
 - Suggest next steps based on what's available (e.g., "Start working —
   the system adapts to you as you go. After a session, try
   `/session-review` to begin building your learning profile.")
+- Recommend the getting-started guide as the next immediate step. Tell
+  them this lesson has already been adapted to their intake profile.
+  Provide the command as a copy-pasteable line and note they may want to
+  `/clear` first to start a fresh session:
+  ```
+  /lesson-scaffold guides/getting-started.md
+  ```
 
 ### 4d. Data sharing (optional)
 
