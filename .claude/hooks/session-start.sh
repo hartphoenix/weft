@@ -46,7 +46,7 @@ CONTEXT_PARTS+=("Weft harness root: $WEFT_ROOT. All harness file paths (learning
 # ── Condition 1: No learning directory at all ─────────────────────────
 
 if [ ! -d "$LEARNING_DIR" ]; then
-  CONTEXT_PARTS+=("This user has no learning/ directory. They haven't been onboarded yet. Suggest running /intake to get started — it takes about 15 minutes and builds a personalized profile from an interview (and any materials dropped in background/).")
+  CONTEXT_PARTS+=("This user has no learning/ directory. They haven't been onboarded yet. Suggest running /intake to get started — it takes about 30 minutes and builds a personalized profile from an interview (and any materials dropped in background/).")
   JOINED=$(printf '%s\n' "${CONTEXT_PARTS[@]}")
   echo "{\"additionalContext\": $(echo "$JOINED" | jq -Rs .)}"
   exit 0
@@ -57,14 +57,14 @@ fi
 if [ -f "$LEARNING_DIR/.intake-notes.md" ]; then
   PHASE=$(head -20 "$LEARNING_DIR/.intake-notes.md" | sed -n 's/.*phase: //p' || echo "")
   if [ -n "$PHASE" ] && [ "$PHASE" != "complete" ]; then
-    CONTEXT_PARTS+=("Intake was started but not finished (stopped at phase: $PHASE). Offer to resume with /intake — it will pick up where it left off.")
+    CONTEXT_PARTS+=("This user started the setup interview but didn't finish it. Let them know they don't have to start over — /intake will resume from where they stopped. Offer to continue now.")
   fi
 fi
 
 # ── Condition 3: No current-state (intake ran but no state generated) ─
 
 if [ ! -f "$LEARNING_DIR/current-state.md" ]; then
-  CONTEXT_PARTS+=("The learning/ directory exists but there's no current-state.md. Intake may not have completed. Suggest running /intake to finish setup.")
+  CONTEXT_PARTS+=("This user has installed Weft but hasn't set up their learning profile yet. Prompt them to run /intake — it's a short interview (about 30 minutes) that builds a personalized profile: their background, goals, current skills, and how they learn. That profile is what shapes everything else in the harness. When they're ready, they just type /intake.")
   JOINED=$(printf '%s\n' "${CONTEXT_PARTS[@]}")
   echo "{\"additionalContext\": $(echo "$JOINED" | jq -Rs .)}"
   exit 0
