@@ -34,14 +34,20 @@ if [ -z "$WEFT_ROOT" ]; then
   WEFT_ROOT="$CWD"
 fi
 
-LEARNING_DIR="$WEFT_ROOT/learning"
+# Learning state lives at the harness root (from ~/.config/weft/root).
+# Package operations (update check, skill registration) use the repo
+# this hook script lives in — which may differ from the learning root.
+LEARNING_ROOT="$WEFT_ROOT"
+PACKAGE_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+
+LEARNING_DIR="$LEARNING_ROOT/learning"
 CONTEXT_PARTS=()
 
 # ── Inject harness root path ─────────────────────────────────────────
 # Reinforces the CLAUDE.md directive — agent sees the path from two
 # independent sources (CLAUDE.md section + this hook context).
 
-CONTEXT_PARTS+=("Weft harness root: $WEFT_ROOT. All harness file paths (learning/, background/, .claude/references/) resolve from this root, not from the current working directory.")
+CONTEXT_PARTS+=("Weft harness root: $LEARNING_ROOT. All harness file paths (learning/, background/, .claude/references/) resolve from this root, not from the current working directory.")
 
 # ── Condition 1: No learning directory at all ─────────────────────────
 
@@ -98,7 +104,7 @@ else
   UPDATE_PREF="notify"
 fi
 
-if [ "$UPDATE_PREF" != "off" ] && [ -d "$WEFT_ROOT/.git" ]; then
+if [ "$UPDATE_PREF" != "off" ] && [ -d "$PACKAGE_ROOT/.git" ]; then
   # Check if a fetch is due (>24h since last fetch)
   NOW=$(date +%s)
   LAST_FETCH=0
@@ -109,23 +115,23 @@ if [ "$UPDATE_PREF" != "off" ] && [ -d "$WEFT_ROOT/.git" ]; then
   ELAPSED=$((NOW - LAST_FETCH))
   if [ "$ELAPSED" -gt 86400 ]; then
     # Fetch in background, non-blocking
-    (cd "$WEFT_ROOT" && git fetch origin 2>/dev/null &)
+    (cd "$PACKAGE_ROOT" && git fetch origin 2>/dev/null &)
     echo "$NOW" > "$LAST_FETCH_FILE"
   fi
 
   # Compare local vs remote
-  BEHIND=$(cd "$WEFT_ROOT" && git rev-list HEAD..origin/main --count 2>/dev/null || echo "0")
+  BEHIND=$(cd "$PACKAGE_ROOT" && git rev-list HEAD..origin/main --count 2>/dev/null || echo "0")
 
   if [ "$BEHIND" -gt 0 ]; then
     if [ "$UPDATE_PREF" = "auto" ]; then
       # Auto-update
-      if (cd "$WEFT_ROOT" && git pull --ff-only 2>/dev/null); then
+      if (cd "$PACKAGE_ROOT" && git pull --ff-only 2>/dev/null); then
         CONTEXT_PARTS+=("Weft auto-updated ($BEHIND new commits).")
       fi
       # Silent on failure — session still works
     else
       # Notify
-      CONTEXT_PARTS+=("Weft update available ($BEHIND new commits). Run: cd $WEFT_ROOT && git pull")
+      CONTEXT_PARTS+=("Weft update available ($BEHIND new commits). Run: cd $PACKAGE_ROOT && git pull")
     fi
   fi
 fi
@@ -135,7 +141,7 @@ fi
 # into ~/.claude/skills/. Fires when a git pull brings in a new skill
 # directory that bootstrap hasn't registered yet.
 
-HARNESS_SKILLS_DIR="$WEFT_ROOT/.claude/skills"
+HARNESS_SKILLS_DIR="$PACKAGE_ROOT/.claude/skills"
 if [ -d "$HARNESS_SKILLS_DIR" ]; then
   UNLINKED_SKILLS=()
   for skill_dir in "$HARNESS_SKILLS_DIR"/*/; do
@@ -148,7 +154,7 @@ if [ -d "$HARNESS_SKILLS_DIR" ]; then
   if [ ${#UNLINKED_SKILLS[@]} -gt 0 ]; then
     SKILL_COUNT=${#UNLINKED_SKILLS[@]}
     SKILL_NAMES=$(IFS=', '; echo "${UNLINKED_SKILLS[*]}")
-    CONTEXT_PARTS+=("$SKILL_COUNT new weft skill(s) installed but not yet linked: $SKILL_NAMES. Run bootstrap to register them: bash $WEFT_ROOT/scripts/bootstrap.sh")
+    CONTEXT_PARTS+=("$SKILL_COUNT new weft skill(s) installed but not yet linked: $SKILL_NAMES. Run bootstrap to register them: bash $PACKAGE_ROOT/scripts/bootstrap.sh")
   fi
 fi
 

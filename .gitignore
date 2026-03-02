@@ -10,3 +10,4 @@ learning/session-logs/*
 !learning/session-logs/.gitkeep
 background/*
 !background/.gitkeep
+.claude/settings.json
