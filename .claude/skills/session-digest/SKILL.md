@@ -1,20 +1,18 @@
 ---
 name: session-digest
 description: >-
-  Lightweight learning-state update from session evidence without
-  quizzing. Discovers recent undigested sessions, reads transcripts for
-  concept engagement and fluency signals, and proposes a diff to
-  current-state.md for human approval. Use when learning state is stale,
-  before startwork, or when the user wants to update scores without a
-  full session review.
+  Returns a structured learning-state diff from session evidence without
+  quizzing or writing files. Callers (session-review, startwork, or the
+  user's main context) handle presentation, approval, and writes. Use
+  when learning state is stale, before startwork, or when the user wants
+  to update scores without a full session review.
 ---
 
 # Session Digest
 
-Four phases. Phases 1-3 are autonomous; Phase 4 is interactive. In
-sub-agent mode (dispatched by startwork or another skill), Phases 1-3
-run autonomously and the structured diff is returned as output — the
-calling skill handles presentation and approval.
+Three phases. All autonomous. Returns a structured diff as output.
+The calling context (session-review, startwork, or the user's main
+conversation) handles presentation, approval, and file writes.
 
 ## Path Resolution
 
@@ -50,14 +48,8 @@ not the current working directory. If needed, read
    skill was invoked (the current session would appear in the manifest
    since its JSONL is being written to disk).
 5. If 0 sessions remain, report "no undigested sessions" and exit.
-6. **Standalone mode only:** Present the manifest summary: N sessions
-   found spanning date range, total message count. On first run (no
-   `.last-digest-timestamp`), note that this is the initial digest
-   covering all sessions since intake. Ask user to confirm before
-   proceeding (they may want to narrow the window — especially relevant
-   for large first-run windows).
-
-   **Sub-agent mode:** Skip confirmation. Proceed directly to Phase 2.
+6. Proceed directly to Phase 2. If the caller wants confirmation
+   (e.g., first-run warning), they handle it before dispatching.
 
 ## Phase 2: Extract
 
@@ -135,55 +127,32 @@ evidence worth recording)
 - Concepts with contradictory signals across sessions
 - Concepts that appear heavily used but have no current-state entry
 
-### Sub-agent mode output
+## Output Format
 
-In sub-agent mode, return the structured diff as output using the
-format from Phase 4 below. Do not write any files. The calling skill
-handles presentation, approval, and writes.
-
-## Phase 4: Present & Approve (standalone mode only)
-
-Format the diff for quick scanning. Example:
+Return the structured diff using these four sections. This is the
+return value — digest does not write files.
 
 ```
-## Proposed Updates (5 sessions, Feb 25 - Mar 3)
+## Proposed Updates (N sessions, date range)
 
-### Score Changes (3)
-  react-context: 2 -> 3 (procedural gap)
-    Evidence: Built provider/consumer pattern in chatbot;
-    debugged context not updating — solved independently.
+### Score Changes
+  concept-name: current -> proposed (gap type)
+    Evidence: [specific quote, paraphrase, or behavioral description]
 
-  css-mobile-layout: 3 -> 4
-    Evidence: Solved viewport overflow and scroll containment
-    without agent assistance across two sessions.
+### New Evidence (score unchanged)
+  concept-name: score (unchanged)
+    Evidence: [new observation worth recording]
 
-  request-lifecycle: 3 (unchanged, new evidence)
-    Evidence: Correctly ordered middleware in new Express project.
-
-### New Concepts (2)
-  form-validation (arc: react-fundamentals, score: 2, gap: procedural)
-    Evidence: First attempt at controlled forms with validation;
-    needed significant help with error state management.
-    ! Low confidence — suggest for quiz
-
-  api-error-handling (arc: http-and-apis, score: 3, gap: procedural)
-    Evidence: Implemented try/catch with status codes; correct
-    shape but inconsistent error response format.
+### New Concepts
+  concept-name (arc: arc-name, score: N, gap: type)
+    Evidence: [description]
+    ! Low confidence — suggest for quiz  (when applicable)
 
 ### Flags
-  > 3 sessions focused on game-design concepts — no arc for
-    cooperative-game-mechanics exists yet. Create one?
+  > [observations that don't map to score changes]
 ```
 
-User can:
-- Approve all
-- Approve with modifications (adjust scores, rename concepts, assign arcs)
-- Skip individual items
-- Reject all
-
-On approval: write changes to `current-state.md` using the same YAML
-entry format as session-review (see `.claude/skills/session-review/SKILL.md`,
-Phase 3). Each concept entry:
+**YAML entry schema** for callers writing to `current-state.md`:
 
 ```yaml
   - name: concept-name
@@ -195,12 +164,27 @@ Phase 3). Each concept entry:
       - { date: YYYY-MM-DD, score: 3, note: "brief qualitative note" }
 ```
 
-Key difference from session-review: source tag is `digest:observed`
-instead of `session-review:quiz`. No `last-quizzed` or `times-quizzed`
-fields — digest doesn't quiz.
+No `last-quizzed` or `times-quizzed` fields — digest doesn't quiz.
 
-Update `learning/.last-digest-timestamp` to the latest digested
-session's end date (`YYYY-MM-DD`).
+Callers are responsible for writing approved entries to
+`current-state.md` and updating `learning/.last-digest-timestamp` to
+the latest digested session's end date.
+
+## Standalone Invocation
+
+When the user invokes `/session-digest` directly (not as a sub-agent):
+
+1. Run Phases 1-3 to produce the structured diff.
+2. If this is the first digest (no `.last-digest-timestamp`), note
+   that this covers all sessions since intake — user may want to
+   narrow the window. Ask before proceeding.
+3. Present the diff using the Output Format above.
+4. User approves all, approves with modifications, skips items, or
+   rejects.
+5. On approval: write approved entries to `current-state.md` using
+   the YAML schema in Output Format. Update
+   `.last-digest-timestamp` to the latest digested session date.
+6. On rejection: exit without writing.
 
 ## Scope
 
@@ -211,10 +195,12 @@ in the diff presentation — user decides.
 **No new arcs.** Concepts that don't fit existing arcs get proposed
 with `arc: TBD` and a note. User assigns the arc during approval.
 
-**No session logs.** Session logs are session-review's domain. Digest
-writes only:
-- Approved changes to `current-state.md`
-- Updated `learning/.last-digest-timestamp`
+**Digest writes nothing.** Returns structured diff. Caller writes
+approved changes to `current-state.md` and updates
+`.last-digest-timestamp`. (Standalone invocation handles its own writes
+per the Standalone Invocation section above.)
+
+**No session logs.** Session logs are session-review's domain.
 
 ## Anti-Patterns
 
@@ -224,15 +210,14 @@ writes only:
   first and match existing names.
 - Don't digest the current session. The digest window ends before the
   session that's running the digest.
-- Don't write to current-state.md without approval (standalone mode).
-- Don't write session logs — that's session-review's domain.
 
 ## Interoperation
 
 | Skill | How session-digest interoperates |
 |---|---|
 | **session-discovery** | Consumes: runs the script, uses the manifest |
-| **session-review** | Parallel: digest handles passive state updates, review handles quiz. Same current-state.md format. Different source tags. |
-| **progress-review** | Downstream consumer: reads current-state.md entries written by digest. Source tag lets it weight evidence. |
-| **startwork** | Auto-dispatches digest as background sub-agent when 3+ sessions are undigested. Presents diff after session plan. |
+| **session-review** | Upstream dependency. Session-review dispatches digest as foreground sub-agent for evidence gathering. Digest returns structured diff; review uses it for quiz-target selection and state updates. |
+| **progress-review** | Downstream consumer: reads current-state.md entries written by digest callers. Source tag lets it weight evidence. |
+| **startwork** | Dispatches digest as background sub-agent when 3+ sessions are undigested. Presents diff after session plan. Handles approval and writes. |
 | **lesson-scaffold** | Downstream consumer: reads updated scores from current-state.md |
+| **standalone** | When user invokes `/session-digest` directly, the main conversation context receives the structured diff, presents it for approval, and writes approved changes to `current-state.md` and `.last-digest-timestamp`. |

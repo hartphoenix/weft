@@ -11,9 +11,6 @@ description: >-
 
 Stage → commit → push → PR in one invocation.
 
-**Trigger:** Only the literal `/git-ship` command. Not invoked by other
-mentions of shipping, committing, or git workflows in conversation.
-
 ## Flags
 
 | Flag | Effect |
@@ -92,9 +89,5 @@ user before creating. Use `git checkout -b <slug>`.
 
 ## Boundaries
 
-- Never force push
-- Never amend existing commits
-- Never include unrelated changes — report them and move on
-- Never activate outside the `/git-ship` slash command
+- Never force push or amend existing commits
 - Never merge without the explicit `--merge` flag
-- Never commit `.env`, credentials, or secret files

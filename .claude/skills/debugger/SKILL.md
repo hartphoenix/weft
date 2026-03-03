@@ -18,7 +18,7 @@ If both are already provided, skip straight to visibility check.
 
 ## Visibility First
 
-Debugging fails not from lack of intelligence but lack of visibility. Before classifying the bug or proposing a fix, ask: **can I see enough to diagnose this?**
+Before classifying the bug or proposing a fix: **can I see enough to diagnose this?**
 
 If the error text alone points to the answer → skip ahead to layer classification.
 
@@ -31,15 +31,7 @@ The pattern: make the invisible visible, then diagnose from evidence.
 
 ## Layer Classification
 
-Every bug lives on a layer. Name the layer before proposing a fix — it prevents solutions aimed at the wrong altitude.
-
-- **Syntax** — the code doesn't parse. Typos, missing brackets, wrong operators.
-- **Logic** — the code runs but does the wrong thing. Off-by-one, wrong variable, flipped condition.
-- **Runtime** — the code is correct but fails in execution. Type errors, null references, async timing.
-- **Environment** — the code is correct but the setup is wrong. Wrong version, missing dependency, misconfigured path.
-- **Integration** — each piece works alone but they fail together. API contract mismatch, state shape disagreement, event ordering.
-
-State the layer in one sentence: "This is an environment problem — your Node version doesn't support optional chaining." Then fix it at that layer.
+Name the layer (syntax / logic / runtime / environment / integration) before proposing a fix. State it in one sentence: "This is an environment problem — your Node version doesn't support optional chaining." Then fix at that layer.
 
 **For regressions** ("it was working yesterday"): use `git diff` or `git log` to find what changed. LLMs are strong at parsing diffs — the bug is usually in the delta.
 
@@ -68,11 +60,3 @@ This teaches error-reading without stopping to teach. The fix is still the prior
 - If the bug is actually a **concept gap** (the user doesn't understand why it's wrong, not just what's wrong), name the concept and explain it briefly.
 - If it's a **plumbing problem** (wrong Node version, missing env var, broken path), fix it directly. No teaching frame for plumbing — just fix it.
 
-## Anti-Patterns
-
-Do not:
-- Start fixing before you have the full error text
-- Guess at fixes without visibility into the runtime behavior
-- Turn debugging into a teaching session (the fix comes first; learning is incidental)
-- Ask a cascade of diagnostic questions — one rescoping question at a time
-- Propose solutions at the wrong layer (environment fix for a logic bug, etc.)

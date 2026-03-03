@@ -31,28 +31,12 @@ The test: if giving only the narrow answer would leave the user solving the same
 
 ## The One-Sentence Flag
 
-This is the key design move and the only place Quick Reference touches teaching territory.
-
 When a narrow question reveals a structural gap, after giving the direct answer, add one sentence that:
-- **Names** the bigger concept ("This is closure scope — functions remember the variables from where they were defined.")
-- **Does not explain it.** One sentence. No follow-up. No "would you like to know more?"
-- **Does not ask about it.** The flag is planted. The user decides whether to pull on the thread.
+- **Names** the bigger concept
+- **Does not explain it.** One sentence. No follow-up.
 
-Examples:
+Example:
 - Q: "Why does my `setTimeout` callback have the wrong value of `i`?"
   A: [direct fix with `let` or closure] + "This is the closure-over-loop-variable problem — `var` shares one binding across iterations, `let` creates a new one each time."
 
-- Q: "How do I make this function work with different types?"
-  A: [direct answer] + "This is what generics solve — parameterizing types so the function adapts without losing type safety."
-
-If the question is purely factual, skip the flag. Not every question hints at a gap.
-
-## Anti-Patterns
-
-Do not:
-- Ask Socratic questions ("What do you think happens when...?")
-- Scaffold or withhold the answer ("Before I tell you, try...")
-- Offer unsolicited deep explanations
-- Hedge or over-qualify ("Well, it's complicated, but generally speaking...")
-- Suggest courses, docs, or further reading unless explicitly asked
-- Continue after the answer is delivered
+If the question is purely factual, skip the flag.

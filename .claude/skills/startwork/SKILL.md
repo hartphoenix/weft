@@ -33,8 +33,8 @@ from another device.
 
 ## Phase 1: Gather
 
-Read all local data sources. Fail fast and degrade gracefully — every
-source is optional. No network calls.
+Read all local data sources. Every source is optional — degrade
+gracefully. No network calls.
 
 ### Step 1: Learning state check
 
@@ -195,10 +195,7 @@ gets a tier assignment and a brief rationale.
 
 ### Tier 1: Continuation
 
-Something already mid-flight. Default to finishing what you started —
-context-switching fragments awareness.
-
-Signals, strongest to weakest:
+Default to finishing what's mid-flight. Signals, strongest to weakest:
 - Uncommitted work on a feature branch
 - In-progress items in local task files
 - "Remaining work" noted in the most recent session log
@@ -227,16 +224,9 @@ approaches:
 
 ### Tier 4: Growth-edge
 
-Where the developmental frontier is, surfaced through the lens of
-active projects. This is where the learning happens.
-
-Use the ordering heuristic from `.claude/references/developmental-model.md`:
-breadth, compounding, upstreamness, time-to-value, complexity-chunking
-gap.
-
-The growth-edge item should connect a project need to a learning
-opportunity: "This project needs X, and you're at level Y — this is
-where the learning happens."
+Connect a project need to a learning opportunity. Use the ordering
+heuristic from `.claude/references/developmental-model.md`: breadth,
+compounding, upstreamness, time-to-value, complexity-chunking gap.
 
 ### Tier 5: Maintenance
 
@@ -293,19 +283,12 @@ tiers.
 
 **Something to try**
 
-One playful suggestion connected to the growth edge. A small,
-exploratory, low-stakes variant of the work — the kind of thing you'd
-build just to see what happens. This serves the explore state: playful
-attention with low cost of failure.
+One playful, low-stakes suggestion connected to the growth edge.
 
 ### Presentation style
 
-- Plain language throughout. No developmental model jargon.
-- The briefing should be scannable in under 2 minutes.
-- Time estimates are rough — "about 45 min", not "43 minutes."
-- When a concept score or gap type informs a recommendation, show the
-  insight, not the data: "you're growing with X" not "score: 2,
-  gap: procedural."
+Plain language — no developmental model jargon. Show insights, not
+data: "you're growing with X" not "score: 2, gap: procedural."
 
 ### Example output
 
@@ -352,8 +335,6 @@ Present the session briefing. Three possible responses:
   context about that item (deadline, prerequisites, learning state),
   mention it briefly. The system proposes; the human decides.
 
-Startwork is done. The session begins. No files written, no state
-persisted — unless Phase 5 fires.
 
 ---
 
@@ -400,10 +381,6 @@ If a session-digest sub-agent was dispatched in Step 3c:
 4. **If failed:** Skip silently. Don't mention it. The session
    proceeds.
 
-Startwork's read-only contract is preserved for Phases 1-4. Phase 5
-writes happen only with explicit user approval, following the
-progress-review skill's log format and evidence tagging conventions.
-
 ---
 
 ## Graceful Degradation
@@ -417,37 +394,10 @@ progress-review skill's log format and evidence tagging conventions.
 | No git repo | Tier 1 weakened. Unusual but not an error. |
 | Everything empty | "This looks like a fresh start. What are you working on?" — simple planning conversation. |
 
-Never error on missing data. Degrade the briefing silently. Only
-surface a message when the degradation meaningfully changes what
-the skill can offer.
-
 ---
 
-## Anti-Patterns
+## Consent Gate
 
-- **Don't teach during startwork.** Name the growth edge; the session
-  teaches. Startwork composes attention, not content.
-- **Don't write to learning state in Phases 1-4.** Startwork's core is
-  read-only. Phase 5 (progress-review) may write with user approval,
-  but that runs through the progress-review skill's own protocol.
-- **Don't rank personal vs. team work.** If both contexts exist, present
-  both domains clearly labeled. The human decides which gets their time.
-- **Don't ignore the override.** If the user says "I want to work on X,"
-  accept it. Offer context, not resistance.
-- **Don't bloat the briefing.** If it takes more than 2 minutes to read,
-  it has failed. This is an attention composition, not a report.
-- **Don't hardcode paths.** Use convention-based discovery for schedule
-  and project context files.
-
-## Consent Gate — External Signal Paths
-
-Startwork may check for teacher responses on the learner's signal repo
-(teacher-response check, when built). All external signal paths obey
-one consent gate:
-
-- **Check `.claude/consent.json`.** If absent, the user has not
-  consented to data sharing — skip all external queries silently.
-- **Check `learning/relationships.md`.** If absent or has no
-  `signal_repo`, skip the teacher-response check silently.
-- Both checks run before any network call. No prompt, no mention —
-  just skip.
+External signal paths (teacher-response checks) require both
+`.claude/consent.json` and `learning/relationships.md` with a
+`signal_repo`. If either is absent, skip silently.

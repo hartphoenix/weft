@@ -63,14 +63,9 @@ dispatch.
 
 ## Phase 1: Discover
 
-Scan for materials before asking questions. Richer input produces a
-sharper starting model.
-
-Before starting, read `.claude/references/developmental-model.md`. This
-reference tells you how to analyze a learner's development — the
-complexity/chunking dimensions, dependency types, ordering heuristic,
-and compounding engine. Use it to calibrate interview questions and
-identify bridge opportunities from the learner's background.
+Scan for materials before asking questions. Read
+`.claude/references/developmental-model.md` first — use it to
+calibrate interview questions and identify bridge opportunities.
 
 ### 1a. Scan background materials
 
@@ -145,88 +140,34 @@ If the background was rich, this may be shorter.
 ### Interview protocol
 
 - Conversational, not interrogative. One domain at a time.
-- Acknowledge what you learned from background before asking related
-  questions. ("Your writing shows clear structural thinking — tell me
-  more about how you approach organizing ideas.")
-- When the user gives a short answer, one follow-up is okay. Two
-  follow-ups on the same topic is too many — move on.
-- If the interview is running long (more than 15 minutes), offer to
-  wrap up: "I have enough to build a solid starting profile. We can
-  always refine it later. Want to continue or should I synthesize
-  what I have?"
+- Acknowledge what background revealed before asking related questions.
+- Offer to wrap up if the interview exceeds 15 minutes.
 
 ### Question domains
 
-Work through these domains in order. The background report's signal-strength
-ratings guide your depth: **strong** domains need only a confirmation
-question or two, **moderate** domains get targeted follow-ups, **thin**
-or missing domains get the full question set. Within each domain, follow
-interesting threads briefly but don't interrogate — one follow-up per
-short answer, max.
+Work through these domains in order. Background signal-strength
+ratings guide depth: **strong** = confirmation only, **moderate** =
+targeted follow-ups, **thin/missing** = full exploration. One
+follow-up per short answer, max.
 
-**1. Background and context**
+**1. Background and context** — experience level, how they got here,
+prior domains. Note prior-domain skills as bridge material.
+(→ feeds "How {name} learns" transfer mappings, "Strengths")
 
-What to discover: experience level, how they got here, prior domains.
-The learner may be studying software, data science, writing, design,
-research, or any other field — discover the domain, don't assume it.
+**2. Goals and aspirations** — who they want to become, not what they
+want to learn. States of being, not skill checklists. Timeframes if
+driving.
 
-- What are you learning? What's the domain or field?
-- How long have you been at it? (timeline, formal vs self-taught,
-  what context — course, degree, bootcamp, hobby, career switch)
-- What were you doing before? (prior domains often shape learning
-  style and strengths — note these as potential bridge material)
-- What have you built or produced? What felt good about it?
-- How does [prior domain] show up in how you approach [current domain]?
-  (→ feeds "How {name} learns" transfer mappings, "Strengths")
+**3. Current state** — concrete skill levels for initial calibration.
+What's solid, what's shaky, hardest problem solved recently.
+(→ feeds current-state.md)
 
-**2. Goals and aspirations**
+**4. Learning style** — how they learn best, how they get unstuck,
+what helps vs. annoys. Error patterns.
+(→ feeds "How {name} learns", "How {name} gets unblocked")
 
-What to discover: who they want to become, not just what they want to
-learn. States of being, not skill checklists.
-
-- What kind of [practitioner] do you want to become? (use their
-  domain — developer, designer, researcher, writer, etc.)
-- What excites you about this field? What would you create if you
-  could create anything?
-- Is there a timeframe or milestone driving you? (course end date,
-  job search, project deadline, personal target)
-
-**3. Current state**
-
-What to discover: concrete skill levels for initial calibration.
-
-- What skills and tools do you work with? For each: comfortable,
-  learning, or tried-once?
-- What's the hardest problem you've solved recently in this domain?
-  Walk me through how you approached it.
-- What concepts feel solid? What feels shaky or confusing?
-- What do you do well that you might take for granted?
-  (→ feeds "Strengths")
-
-**4. Learning style**
-
-What to discover: how they learn best, how they get unstuck, what
-helps vs. what annoys.
-
-- When you're stuck, what do you do first?
-- Do you learn better by reading, building, watching, or discussing?
-- Do you prefer someone to explain the answer or guide you to find it?
-- How do you feel about making mistakes while learning?
-- Think of a time someone helped you get unstuck really effectively —
-  what did they actually do?
-  (→ feeds "How {name} gets unblocked")
-- When you make mistakes, is there a pattern to where they tend to
-  happen?
-  (→ feeds "How {name} learns" error patterns)
-
-**5. Work and communication preferences**
-
-What to discover: how they want the system to interact with them.
-
-- What does good work look like to you? (quality standards, style)
-- Do you prefer structure or flexibility in your workflow?
-- How direct do you want feedback? Gentle nudges or straight talk?
-- When someone is helping you, what's most useful? What's annoying?
+**5. Work and communication preferences** — quality standards,
+structure vs. flexibility, feedback directness.
 
 ### Record domain notes
 
@@ -252,57 +193,26 @@ notes are what survives.
 
 ### Reflect and check
 
-After the five interview domains, pause and reflect back what you've
-heard. Present a brief portrait: here's where I think you are in your
-learning. Include:
+Reflect back a brief portrait: what they're confident about, where
+they're stuck, predicted workflow patterns, and bridge material from
+prior domains. This is a mirror, not a grade — ask: "Does this sound
+right? Anything I'm missing?"
 
-- What they seem confident about and where they light up
-- Where they feel stuck or uncertain
-- Predictions about their workflow — how you'd expect them to approach
-  a new problem, what patterns might show up
-- Bridge material from prior domains that could accelerate learning
-
-This is a mirror, not a grade. The learner should recognize themselves
-or correct the picture. Ask: "Does this sound right? Anything I'm
-missing or getting wrong?"
-
-After the user confirms or corrects, append a `## Reflection` section
-to the intake notes with your summary and any corrections they offered.
-Update the frontmatter: add `reflection` to `domains_completed`, set
-`last_completed: reflection`.
+Append a `## Reflection` section to intake notes with the summary and
+corrections. Update frontmatter: add `reflection` to
+`domains_completed`, set `last_completed: reflection`.
 
 ### Projects
 
-Projects are how skills develop — the instrument for closing the gap
-between current state and goals. After the reflection, explore what
-the learner is currently working on.
+Explore current projects — what they're building, where they are in
+it, what they need to learn to finish, and what it means to them. The
+*why* matters as much as the *what*. Build on anything that surfaced
+earlier.
 
-If projects came up in background or earlier in the interview, build
-on what you know. Otherwise ask directly.
+If no current projects, note it for post-intake follow-up.
 
-- What are you working on right now? (current projects, assignments,
-  personal builds, work deliverables)
-- For each project: where are you in it? What's going well? What's
-  blocked or unclear?
-- What do you not yet know how to do to finish this?
-- What do you want out of this project as a learner? (what skills or
-  understanding should it build?)
-- What do you want it to do in the world? (functional purpose, who
-  it's for, why it matters)
-
-The *why* is as important as the *what*. A project that serves a goal
-the learner cares about generates intrinsic motivation; one that
-doesn't becomes a chore.
-
-**If the learner has no current projects**, note this as something to
-address after intake. Don't dive into project brainstorming during
-the interview — but mention that the system can help with that as a
-next step and ask if they'd like to schedule it.
-
-After the projects discussion, append a `## Projects` section to the
-intake notes following the same format (findings, signal strength, key
-signals). Update the YAML frontmatter: add `projects` to
-`domains_completed`, set `last_completed: projects`.
+Append a `## Projects` section to intake notes. Update frontmatter:
+add `projects` to `domains_completed`, set `last_completed: projects`.
 
 ---
 
@@ -392,13 +302,8 @@ skills emerge from pursuing goals through projects.
 
 Guidelines:
 - **States of being, not skills.** "A developer who ships products
-  people use" or "A researcher who designs rigorous studies" — not
-  "Learn React" or "Pass statistics."
-- **The learner's words matter.** Use their language, not curriculum
-  language. Refine over time.
-- **2-4 goals is typical.** More than that suggests the goals need
-  consolidation.
-- **Timeframes if mentioned.** Note driving deadlines or milestones.
+  people use" — not "Learn React."
+- **2-4 goals, learner's language, timeframes if mentioned.**
 
 ### 3c. Draft learning/arcs.md
 
@@ -482,39 +387,13 @@ Populate entries from concrete evidence in the interview. Guidelines:
 
 ### 3e. Present and confirm
 
-Present the learner-facing drafts for review. The CLAUDE.md is a
-behind-the-scenes configuration file — don't lead with it.
-
-> **Here are your goals.** These are the aspirational states I heard
-> from our conversation. Anything to add or rephrase?
-
-> **Here's how I see your growth path** — the groups of related skills
-> I'd focus on to get you from where you are to where you're headed.
-
-For each arc, present it in plain language: what the skill group is,
-where they seem to be with it, what they'd need before going further,
-and what the natural next step looks like. Don't use terms like
-"capability cluster," "altitude gate," "complexity-chunking gap," or
-other developmental model jargon. The stored arcs.md file keeps the
-structured format (other skills read it), but what you show the learner
-should read like a conversation, not a technical spec.
-
-> **And here's your initial learning state.** These scores are estimates
-> from our conversation. Adjust anything that feels off.
-
-After the learner reviews goals, arcs, and current state:
-
-> I also generated a configuration file called CLAUDE.md — it tells the
-> system how to work with you (communication style, calibration level,
-> preferences). You can view and edit it anytime. Want to see it now, or
-> should we move on?
-
-If they want to see it, show the draft. If not, proceed. Either way,
-the CLAUDE.md is written in Phase 4 with the same human-gated approval
-as every other file.
+Present learner-facing drafts: goals, arcs (in plain language — no
+developmental model jargon), and current state. Don't lead with
+CLAUDE.md — offer to show it after the learner-facing drafts are
+reviewed. Present arcs as a conversation, not a spec.
 
 Wait for explicit approval of all drafts before proceeding to Phase 4.
-Accept edits — incorporate them into the drafts and re-present if needed.
+Accept edits — incorporate and re-present if needed.
 
 ---
 
@@ -603,21 +482,11 @@ goals.md, arcs.md):
 
 ### 4c. Wrap up
 
-After writing, summarize:
-
-- List every file written or modified, with paths.
-- Remind the user: "All generated files are editable. The intake gives
-  you a starting point — refine anything that doesn't fit as you work."
-- Suggest next steps based on what's available (e.g., "Start working —
-  the system adapts to you as you go. After a session, try
-  `/session-review` to begin building your learning profile.")
-- Recommend the getting-started guide as the next immediate step. Tell
-  them this lesson has already been adapted to their intake profile.
-  Provide the command as a copy-pasteable line and note they may want to
-  `/clear` first to start a fresh session:
-  ```
-  /lesson-scaffold guides/getting-started.md
-  ```
+List every file written/modified with paths. Remind the user everything
+is editable. Recommend the getting-started guide as the next step:
+```
+/lesson-scaffold guides/getting-started.md
+```
 
 ### 4d. Data sharing (optional)
 
@@ -697,24 +566,3 @@ After all approved files are written, delete `learning/.intake-notes.md`
 
 ---
 
-## Anti-patterns
-
-- **Don't teach during intake.** Discover who the learner is. Teaching
-  happens in sessions, not onboarding.
-- **Don't over-interview.** If background answered a question completely, skip it.
-  If the user gives short answers, respect the signal — they may not
-  know yet, or may not care to articulate right now.
-- **Don't write files without approval.** Every generated file gets
-  presented and approved before writing. This is a security invariant,
-  not a courtesy.
-- **Don't overwrite silently.** If CLAUDE.md or current-state.md already
-  exists, the user decides what happens. Never auto-replace.
-- **Don't inflate initial scores.** Intake scores are estimates from
-  conversation, not quiz results. Bias conservative. Session-review
-  calibrates with real evidence.
-- **Don't bloat the CLAUDE.md.** Only include what the agent needs to
-  behave appropriately. The reasoning token tax is real — a 200-line
-  CLAUDE.md competes with every conversation turn.
-- **Don't read background files in the main agent.** The sub-agent handles
-  file analysis. The main agent works from the structured report. This
-  is how context stays clean for the interview and synthesis phases.
