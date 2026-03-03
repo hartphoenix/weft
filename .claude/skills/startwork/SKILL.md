@@ -113,6 +113,22 @@ After reading session logs, check whether a progress review is due:
    Continue to Step 4 without waiting.
 4. If count ≤ 2: skip silently. No mention to user.
 
+### Step 3c: Digest staleness check
+
+1. Read `learning/.last-digest-timestamp`. If missing, use the oldest
+   session log filename date. If no logs exist, use
+   `current-state.md` creation date. Last resort: 30 days ago.
+2. Run session-discovery with `--since <window-start>`.
+3. If 3+ undigested sessions: dispatch session-digest as a background
+   sub-agent (`subagent_type: "general-purpose"`,
+   `run_in_background: true`). Pass it:
+   - The session-discovery manifest (limit to 10 most recent sessions)
+   - Full contents of `learning/current-state.md`
+   - The full contents of `.claude/skills/session-digest/SKILL.md`
+   - Instruction: operate in sub-agent mode, return structured diff
+   Continue to Step 4 without waiting.
+4. If < 3: skip silently.
+
 ### Step 4: Learning state
 
 If the learning state files exist, read them:
@@ -341,9 +357,21 @@ persisted — unless Phase 5 fires.
 
 ---
 
-## Phase 5: Progress Review (conditional)
+## Phase 5: Background Reviews (conditional)
 
-Only runs if a progress-review sub-agent was dispatched in Step 3b.
+Only runs if a sub-agent was dispatched in Step 3b or 3c.
+
+### Session-digest results
+
+If a session-digest sub-agent was dispatched in Step 3c:
+- Present its proposed diff to the user
+- User approves/adjusts/rejects
+- If approved: write changes to `current-state.md`, update
+  `learning/.last-digest-timestamp`
+- If more than 10 sessions were undigested, note that older
+  sessions remain — user can run `/session-digest` standalone
+
+### Progress-review results
 
 1. After the user confirms the session plan (Phase 4), check if the
    progress-review sub-agent has returned.

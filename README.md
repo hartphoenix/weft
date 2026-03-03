@@ -161,6 +161,7 @@ All skills are invoked with `/skill-name` in Claude Code.
 | **/intake** | Onboarding interview — bootstraps your profile from background materials and conversation |
 | **/startwork** | Session planner — reads your state and proposes what to focus on |
 | **/session-review** | End-of-session analysis, quiz, and learning state update |
+| **/session-digest** | Lightweight state update from session transcripts — no quiz, just evidence |
 | **/progress-review** | Cross-session pattern analysis — detects stalls, regressions, and goal drift |
 
 ### Working tools
@@ -177,6 +178,8 @@ All skills are invoked with `/skill-name` in Claude Code.
 
 Some skills run automatically without you invoking them:
 
+- **/startwork** dispatches **/session-digest** when 3+ sessions are
+  undigested, updating your learning state from transcript evidence.
 - **/startwork** dispatches **/progress-review** when 3+ sessions have
   accumulated since the last review, but you can also run it yourself.
 - The **session-start hook** checks your learning state and suggests
@@ -259,6 +262,7 @@ debugging or customizing.
 | `learning/scaffolds/` | lesson-scaffold | Restructured learning materials with concept classifications |
 | `learning/relationships.md` | intake (if opted in) | Teacher/mentor handles and signal repo config |
 | `learning/.intake-notes.md` | intake | Resume checkpoint if intake is interrupted mid-interview |
+| `learning/.last-digest-timestamp` | session-digest | Date of last digest — controls the discovery window |
 | `learning/.progress-review-log.md` | progress-review | Tracks review windows and deferred findings |
 
 ### Session-start hook
