@@ -62,6 +62,12 @@ weight evidence appropriately.
 |-----|---------|------------|
 | `progress-review:pattern` | Inferred from cross-session pattern analysis (stalls, regressions, velocity, drift) | Lower — pattern inference, not direct observation |
 
+### Session-digest sources
+
+| Tag | Meaning | Confidence |
+|-----|---------|------------|
+| `digest:observed` | Behavioral evidence extracted from session transcripts after the fact | Moderate-low — transcript analysis, not contemporaneous observation |
+
 ### General rules
 
 - Every score update includes a source tag.
@@ -70,6 +76,10 @@ weight evidence appropriately.
   (`intake:self-report`, `intake:inferred`) for the same concept.
 - Artifact-based scores (`intake:artifact`, `session-review:observed`)
   carry more weight than self-reports but less than direct quiz results.
+- Digest-observed scores (`digest:observed`) carry less weight than
+  `session-review:observed` (live observation) but more than
+  `progress-review:pattern` (inference). They should not override recent
+  quiz-verified scores.
 - Pattern-inferred scores (`progress-review:pattern`) carry the least
   weight. They should not override recent session-review scores unless
   supported by ≥ 3 data points across sessions.
