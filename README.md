@@ -173,6 +173,7 @@ All skills are invoked with `/skill-name` in Claude Code.
 | **/debugger** | Visibility-first debugging — gets the full error before guessing |
 | **/handoff-test** | Run this to audit Claude's work artifacts for self-containedness before compaction/clear, so the next session or agent starts with a full game plan. |
 | **/handoff-prompt** | Run this to generate a handoff prompt for the next agent when context is running low |
+| **/git-ship** | Full git workflow in one command — stage, commit, push, and PR. `--merge` to squash-merge, `--dry-run` to preview |
 
 ### Automatic dispatch
 
