@@ -5,13 +5,8 @@ description: Restructures external learning materials into a conceptual scaffold
 
 # Lesson Scaffold
 
-Restructure what someone else organized by procedure into what the
-learner needs organized by understanding. The learner's current state
-drives the scaffold — it determines which concepts get emphasis,
-where the bridges are, and what gaps need attention.
-
-Name concepts plainly, bridge them to what the learner knows, and get
-out of the way. The scaffold is a map, not a lecture.
+Restructure procedural material by conceptual dependency, shaped to the
+learner's current state. The scaffold is a map, not a lecture.
 
 ## Inputs
 
@@ -227,23 +222,12 @@ They drive.
 | `goals.md` only | No trajectory connection. Concepts still scored from current-state. |
 | Session logs empty | No recent session context. Scaffold still works. |
 
-Never error on missing data. Shape the scaffold to available data.
-Only surface a message when the degradation meaningfully changes what
-the skill can offer.
-
 ---
 
-## Anti-Patterns
+## Boundaries
 
-- **Don't execute the assignment.** Scaffold is for understanding, not
+- **Don't execute the assignment.** Scaffold for understanding, not
   walkthrough.
-- **Don't teach the concepts yet.** Name and bridge them. Teaching
-  happens during execution.
-- **Don't skip implicit concepts.** Procedural lessons bury
-  assumptions.
-- **Don't ignore emotional context.** "I'm tired" is load-bearing
-  information about session scope.
-- **Don't update learning state.** Lesson-scaffold does not modify
-  concept scores, gaps, or arc state. It writes to
-  `learning/scaffolds/` and may add a `scaffold:` field to session log
-  frontmatter (Step 7), but session-review owns all state updates.
+- **Don't update learning state.** This skill writes to
+  `learning/scaffolds/` and session log frontmatter only.
+  Session-review owns all state updates.

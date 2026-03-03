@@ -8,17 +8,6 @@ description: Discovers Claude Code conversation sessions on the local machine wi
 Utility skill that finds Claude Code conversation sessions stored on the
 local machine. Runs a bun script and returns a JSON manifest.
 
-## When to use
-
-This skill is infrastructure — other skills invoke it, users typically
-don't. The primary consumers:
-
-- **session-review** — find all sessions since last review to gather
-  learning evidence beyond the current conversation
-- **progress-review** — window across multiple sessions for pattern
-  detection
-- **startwork** — check recent session activity for continuation signals
-
 ## How to invoke
 
 Run the discovery script from the harness root:

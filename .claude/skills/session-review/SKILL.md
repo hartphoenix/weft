@@ -29,80 +29,57 @@ not the current working directory. If needed, read
    notes exist, this is the first review — the window starts at intake
    (or repo init).
 
-3. **Gather evidence since last review.** Three evidence sources,
-   gathered in parallel where possible:
+3. **Dispatch session-digest as foreground sub-agent.**
 
-   a. **Conversation context** — the current session's full conversation
-      history. Always available; primary source for the current session.
+   Send to the digest sub-agent:
+   - The review window start date (from step 2)
+   - Full contents of `learning/current-state.md`
+   - Full contents of `.claude/skills/session-digest/SKILL.md`
+   - Instruction: "Discover and extract sessions since {date}. Return
+     structured diff."
 
-   b. **Git history since last review:**
-      ```
-      git log --since="YYYY-MM-DD" --oneline
-      git diff <last-review-date>..HEAD --stat
-      ```
-      Shows what was built, what files changed, commit messages reveal
-      intent. For large diffs, use `--stat` first to get the manifest,
-      then read only files relevant to learning (not config, not lock
-      files).
+   Receive the structured diff (score changes, new evidence, new
+   concepts, flags). The transcript bulk stays in the sub-agent's
+   isolated context — the main window only sees the compressed output.
 
-   c. **Artifacts produced** — new or modified files since the review
-      window. Use `git diff --name-status` to get the list. Focus on
-      source code, tests, and documentation the user wrote (not
-      generated files).
+   If digest returns "no undigested sessions," proceed with
+   current-session evidence only (step 4).
 
-   d. **Prior session logs in the window** — session logs are created
-      only by this skill (Phase 3). If multiple reviews ran on the
-      same day or in a short window, read their frontmatter for
-      already-logged concepts and scores. Don't re-quiz concepts
-      already reviewed in the window.
+4. **Current-session evidence.** Read the current conversation context
+   (always available in the main context window). Identify concepts
+   encountered, strengths, growth edges, and procedural observations
+   from THIS session. Merge with digest findings — current-session
+   evidence takes priority for concepts seen in both.
 
-   e. **Lesson scaffolds in the window** — check `learning/scaffolds/`
-      for scaffold files dated within the review window. If found,
-      read concept classifications (solid / growing / new /
-      prerequisite gap) and the execution sequence. These are
-      predictions made before the session — use them as a baseline
-      to validate against session evidence. Note where the scaffold's
-      classification was accurate and where it was wrong (e.g.,
-      scaffold predicted "solid" but the learner struggled, or
-      predicted "prerequisite gap" but the learner handled it fine).
-      These discrepancies are high-value calibration data.
+5. **Scaffold check.** Read `learning/scaffolds/` for files dated
+   within the review window. Compare scaffold concept classifications
+   against digest findings and current-session evidence. Note
+   discrepancies — these inform quiz-target selection and are
+   high-value calibration data for Phase 4.
 
-4. **Context management gate.**
+6. **Session log deduplication.** Check `learning/session-logs/` for
+   frontmatter from already-reviewed sessions in the window. Their
+   `concepts:` lists show what's already been quizzed — don't re-quiz
+   those concepts.
 
-   After gathering the evidence manifest (file list + conversation
-   size + git stat), assess total volume:
-
-   **If manageable** (conversation is the primary source, git diff is
-   < ~200 lines, < ~10 modified files): analyze inline. Read the
-   relevant diffs and conversation, produce the analysis directly.
-
-   **If context-heavy** (large git diff, many modified files, multiple
-   unreviewed sessions): apply manifest-then-delegate from
-   `.claude/references/context-patterns.md` pattern #1. Dispatch a
-   sub-agent with:
-   - The evidence manifest (file paths, git stat, session log dates)
-   - The current `learning/current-state.md` content
-   - Instructions to read the files/diffs and return a structured
-     analysis report: concepts encountered (with evidence), strengths,
-     growth edges (named gaps), procedural observations
-
-   The main agent works from the sub-agent's report, never falling
-   back to reading raw evidence itself. If the sub-agent fails, retry
-   once or dispatch fresh.
-
-5. **Analysis output.** Whether analyzed inline or via sub-agent, the
-   output is:
-   - Concepts encountered (with specific evidence: file, commit, or
-     conversation reference)
+7. **Analysis output.** Synthesize digest findings + current-session
+   evidence + scaffold checks:
+   - Concepts encountered (with specific evidence: digest output,
+     current conversation, or commit references)
    - Strengths (what the user did well, with evidence)
    - Growth edges (name the gap type — conceptual/procedural/recall —
      not just the topic)
    - Procedural observations (workflow patterns, tool usage, debugging
      approach)
 
-6. Select 4-6 quiz targets. Bias toward partial/stuck concepts. Include at least one application question. If learning/current-state.md has stale low-score concepts relevant to the session, resurface them.
+8. Select 4-6 quiz targets from merged evidence. Bias toward
+   partial/stuck concepts. Include at least one application question.
+   If learning/current-state.md has stale low-score concepts relevant
+   to the session, resurface them. Digest entries flagged as "low
+   confidence — suggest for quiz" are strong candidates.
 
-7. Present the analysis before quizzing: strengths, growth edges, quiz targets with rationale.
+9. Present the analysis before quizzing: strengths, growth edges, quiz
+   targets with rationale.
 
 Honest feedback is the default. The learner is here to grow, not to be reassured. 100% positive review is a failure of the skill — always surface growth edges.
 
@@ -124,11 +101,11 @@ directly — brief and on-task.
 
 **Score the shape of the model, not the precision of the words.** A correct pipeline with wrong locations is a 3; a wrong pipeline is a 2. The question is "does this person understand the system?" — not "did they name every mechanism?"
 
-**Prioritize concepts that compound.** A concept's review value scales with how many other concepts depend on it. If understanding X is a prerequisite for Y, Z, and W, drill X. If X is a leaf node — one thing, no dependencies downstream — it's a lookup, not a quiz target.
+**Prioritize concepts that compound.** If X is a prerequisite for Y, Z, and W, drill X. Leaf nodes are lookups, not quiz targets.
 
-**The most important concepts may not be the ones that produced errors.** Architectural decisions, design principles, and structural reasoning often compound more than implementation details. A session that includes both systems design and debugging should weight the design questions higher, not default to quizzing on the bugs.
+**Weight architecture over error detail.** A session with both systems design and debugging should weight the design questions higher — don't default to quizzing on the bugs.
 
-**Quiz at the right altitude.** If a concept is a detail of something larger, check whether the parent concept is the real learning edge. "How does `Set-Cookie` work?" might be a subquestion of "how does session-based auth work?" — quiz the one that matters more.
+**Quiz at the right altitude.** If a concept is a detail of something larger, quiz the parent. "How does `Set-Cookie` work?" might really be "how does session-based auth work?"
 
 ## Phase 3: Log
 
@@ -186,10 +163,26 @@ evidence source per `.claude/references/scoring-rubric.md`:
 - `session-review:observed` — evident from session work but not directly
   quizzed (use sparingly — only for concepts with strong behavioral
   evidence from commits or artifacts)
+- `digest:observed` — proposed by session-digest from transcript
+  evidence, written by session-review for concepts not covered by the
+  quiz
+
+**Merge logic:** If a concept appears in both digest findings AND quiz
+results, the quiz score supersedes. Write digest-proposed scores only
+for concepts the quiz didn't cover. This ensures quiz-verified evidence
+always takes priority over transcript-inferred evidence.
 
 Create new entries as needed. Check existing names first — don't create
 near-duplicates. Quiz-verified scores supersede prior estimates
-(`intake:self-report`, `intake:inferred`) for the same concept.
+(`intake:self-report`, `intake:inferred`, `digest:observed`) for the
+same concept.
+
+### Digest timestamp
+
+After all current-state.md writes complete, update
+`learning/.last-digest-timestamp` to the latest digested session's end
+date. This prevents future digest runs from re-processing sessions
+already covered by this review.
 
 ### Goals and arcs check (`learning/goals.md`, `learning/arcs.md`)
 
@@ -217,12 +210,7 @@ After updating current-state, read `learning/goals.md` and
 before writing. Show what would change and why — cite specific session
 evidence. The user approves, edits, or skips each change.
 
-**If no updates are needed:** Move on silently. Don't force updates
-every session — goals and arcs are meant to be stable structures that
-evolve gradually, not session-by-session.
-
-These files are consumed by the startwork skill for daily priority
-computation — keeping them accurate matters.
+**If no updates are needed:** Move on silently.
 
 ### CLAUDE.md enrichment check
 
@@ -338,17 +326,9 @@ Two layers: learner feedback (prompted) + agent self-report
 6. If `.claude/consent.json` doesn't exist or the learner skips,
    move on silently. Never prompt about opt-in outside of intake.
 
-**Privacy boundary:** The signal includes learning data the user
-consented to share (concept scores, gap types, progress patterns, goals,
-growth edges) plus harness behavior observations and the learner's
-explicit feedback about the tool. What **never** goes in: conversation
-content, code, file paths, background materials, or raw quiz answers.
+**Privacy boundary:** Never include conversation content, code, file
+paths, background materials, or raw quiz answers in the signal.
 
-**Consent gate:** `.claude/consent.json` is the single consent gate for
-all external data sharing. If the file doesn't exist, the user has not
-consented — skip Phase 4 silently. If it exists, the user opted in
-during intake. Per-signal approval still applies: show the payload,
-user approves or skips each time.
 
 ## Phase 5: Sync (optional)
 
@@ -367,38 +347,13 @@ cd <harness-root> && git add learning/ && git commit -m "session-review: update 
 Non-blocking on failure — warn but don't retry. If they decline, skip
 silently.
 
-## Anti-Patterns
+## Interoperation
 
-- Don't teach during review. Note the gap; the next session teaches.
-- Don't inflate scores. A generous 4 hides a concept from spaced repetition.
-- Don't log without quizzing. Every logged score comes from a quiz answer, not session observation.
-- Don't ask leading questions. Test recall, not recognition.
+| Consumer | What it reads from session-review output |
+|---|---|
+| progress-review | Session log frontmatter, bodies, current-state.md |
+| lesson-scaffold | Session log frontmatter (scores, gap types) |
+| startwork | Session log frontmatter (continuation, concepts, arcs) |
 
-## Consumer Interfaces
-
-**Progress-review** (built, `.claude/skills/progress-review/`): reads
-session log frontmatter + bodies + current-state.md + goals.md +
-arcs.md + scaffolds. Detects cross-session patterns (stalls,
-regressions, goal drift, arc readiness). Dispatched by startwork when
-unreviewed sessions > 2, or invoked standalone. Session-review must
-write clean YAML and use consistent concept names across sessions.
-
-**Lesson-scaffold** (built, `.claude/skills/lesson-scaffold/`): reads
-recent session log frontmatter to classify concepts relative to the
-learner's current state. Uses scores and gap types from session-review
-output.
-
-**Startwork** (built, `.claude/skills/startwork/`): reads session log
-frontmatter for continuation signals, recent concepts/scores, arc
-activity, and unfinished threads.
-
-**Coordination file: `learning/.progress-review-log.md`** — not written
-by session-review, but dependent on session-review's output. Progress-review
-and startwork both read this file to determine the last review date (for
-session-log windowing) and to retrieve deferred findings. They both
-append entries after reviews. The review window starts from the date in
-this log, covering all session logs since. Session-review's consistent
-YAML frontmatter and concept naming across sessions is what makes the
-windowing useful.
-
-**Spaced repetition** (future): reads current-state.md only. Prioritizes by score ascending + last-quizzed ascending. Uses gap type to shape question style. Detects stalls via high times-quizzed with low score.
+Consistent YAML frontmatter and concept names across sessions is what
+makes downstream windowing work.

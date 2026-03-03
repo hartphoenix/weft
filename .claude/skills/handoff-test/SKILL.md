@@ -10,9 +10,7 @@ description: >
 
 ## The Naive Reader
 
-A fresh Claude instance with no session history. Technically competent — can read the codebase, run code, check git history. Has access to standard tooling, CLAUDE.md, and memory files. But has seen nothing from this conversation: no decisions made, options rejected, constraints discovered, or terminology coined. The only things that exist for the naive reader are what's written in persistent artifacts.
-
-The test: could that instance pick up the artifact and execute without asking clarifying questions?
+A fresh Claude instance with CLAUDE.md and tooling but nothing from this conversation. The only things that exist for it are what's written in persistent artifacts.
 
 ## Process
 

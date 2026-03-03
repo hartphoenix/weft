@@ -286,39 +286,17 @@ the skill can offer.
 
 ---
 
-## Anti-Patterns
+## Boundaries
 
-- **Don't teach** — identify patterns, don't explain concepts. This
-  is a diagnostic, not a lesson.
-- **Don't auto-write** — every change is human-gated. Present proposed
-  changes; wait for approval.
-- **Don't invent patterns** — every finding needs specific evidence
-  (session dates, scores, log references). "No patterns detected" is
-  valid and useful.
-- **Don't use jargon** — plain language in all user-facing output.
-  "You've been stuck on X" not "stall detected: times-quizzed ≥ 3,
-  score ≤ 2."
-- **Don't bloat** — 3-5 themes max. If the review takes more than 3
-  minutes to read, it has failed.
-- **Don't ignore deferrals** — if a finding was deferred in a prior
-  review and the pattern persists or worsened, escalate its priority.
-  Problems don't disappear because they were postponed.
-- **Don't block startwork** — when running as a background sub-agent,
-  if analysis fails or takes too long, startwork proceeds unaffected.
-  This skill is an enrichment, not a gate.
 - **Don't compete with session-review** — session-review owns
-  single-session scoring from direct observation. Progress-review owns
-  cross-session patterns. Different evidence bases, different
-  confidence levels, different scopes.
+  single-session scoring. Progress-review owns cross-session patterns.
+- **Don't ignore deferrals** — if a deferred finding persists or
+  worsened, escalate its priority.
+- **Don't block startwork** — if analysis fails as a background
+  sub-agent, startwork proceeds unaffected.
 
-## Consent Gate — External Signal Paths
+## Consent Gate
 
-Progress-review may publish to the learner's signal repo (Phase 5,
-when built). All external signal paths obey one consent gate:
-
-- **Check `.claude/consent.json`.** If absent, the user has not
-  consented to data sharing — skip all external publishing silently.
-- **Check `learning/relationships.md`.** If absent or has no
-  `signal_repo`, skip teacher-facing publishing silently.
-- Both checks run before any network call. No prompt, no mention —
-  just skip.
+External publishing requires both `.claude/consent.json` and
+`learning/relationships.md` with a `signal_repo`. If either is absent,
+skip silently.
