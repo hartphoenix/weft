@@ -424,21 +424,31 @@ Or add an alias to your shell profile:
 alias cc='claude --dangerously-skip-permissions'
 ```
 
-If you usually run Claude Code in an IDE like VS Code (sidebar panel),
-you can't pass CLI flags. Instead, add this to the top level of your
+**Warning: VS Code extension and sidebar.** As of March 2026, the
+VS Code extension has a long-standing bug where it ignores
+`~/.claude/settings.json` — both allow rules and deny rules. Sessions
+launched from the sidebar or extension panel may run without your
+sandbox configuration, deny rules, or hooks. This means the guardrails
+in this guide do not protect sidebar sessions. At least 10 issues have
+been filed on `anthropics/claude-code` since July 2025 with no
+Anthropic response. The VS Code settings `allowDangerouslySkipPermissions`
+and `initialPermissionMode` exist but are unreliable across versions
+and tool types (Bash/Write/Edit are the most commonly broken). There
+is no reliable workaround. Until this is fixed, use the terminal CLI
+for any session where your safety configuration matters.
+
+If you also want `defaultMode` set for contexts where it does work
+(terminal, background agents), add it inside `permissions` in your
 `~/.claude/settings.json`:
 
 ```json
 {
   "permissions": {
-    "defaultMode": "bypassPermissions",  // ← inside permissions
+    "defaultMode": "bypassPermissions",
     "deny": [...]
   }
 }
 ```
-
-This applies to all launch contexts — sidebar, terminal, background
-agents — without needing flags or aliases.
 
 ### Step 5: Test everything
 
@@ -512,6 +522,41 @@ Then start a new Claude Code session and test the sandbox:
   could instruct Claude to set this parameter, which bypasses the
   sandbox for individual commands. Agent-facing invariants prohibit it,
   but it's a model-level control, not structural.
+
+### Plan execution modal bypasses your configuration
+
+When Claude finishes writing a plan, it presents a modal with numbered
+options. In bypass mode, the default (pre-selected, activated by
+spacebar or Enter) is **"Yes, clear context and bypass permissions"** —
+the most destructive option. It clears your entire conversation history
+and bypasses all permission checks in a single keystroke.
+
+The modal appears asynchronously while you may be typing a follow-up
+or doing other terminal work. An errant keystroke fires the default.
+This is not a theoretical risk — it happens multiple times per day in
+active use.
+
+**Why this undermines your safety configuration:** The sandbox, deny
+rules, and hooks described in this guide protect against what Claude
+can do. The plan modal bypasses that protection at the interface
+level — not through a security vulnerability, but through a UX
+design that makes the most destructive action the easiest to trigger.
+Plan mode cannot be avoided (Claude enters it automatically for
+complex tasks, and planning produces dramatically better results),
+the modal cannot be suppressed or reconfigured, and no setting in
+`settings.json` or `keybindings.json` changes its behavior.
+
+At least 20 issues have been filed on `anthropics/claude-code`
+documenting this problem (#18523, #18599, #28722, #10971, among
+others). A separate security finding (#9701) documented the
+`ExitPlanMode` tool returning "User has approved your plan" when no
+approval was given, then executing restricted operations.
+
+**Mitigation:** There is no configuration-level fix. Maintain
+awareness that the modal can appear at any time and that its default
+option clears context and escalates permissions. Do not press Enter
+or spacebar reflexively when the modal appears — arrow to your
+intended option first.
 
 ### Git remote operations require a separate terminal
 
@@ -652,6 +697,11 @@ deny rules. Each layer is simple and independently verifiable.
 
 Set it up, test it, and then stop thinking about it. The whole point is
 to free your attention for the work.
+
+**Further reading:**
+[Claude Code Yolo Mode: What You Need to Know](https://gist.github.com/hartphoenix/698eb8ef8b08ad2ce6a99cf7346cd7cc)
+— security research, threat model, and detailed rationale behind
+this configuration.
 
 ---
 ---

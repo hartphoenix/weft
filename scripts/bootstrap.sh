@@ -285,8 +285,8 @@ fi
 # The session-start hook reads updates preference from this file.
 
 if [ ! -f "$CONFIG_DIR/config.json" ]; then
-  echo '{ "updates": "notify", "digestInterval": 3, "digestMode": "suggest" }' > "$CONFIG_DIR/config.json"
-  echo "✓ Created config.json (update preference: notify, digest: every 3 days)"
+  echo '{ "updates": "notify", "digestInterval": 3, "digestMode": "suggest", "progressReviewDays": 3, "progressReviewSessions": 5 }' > "$CONFIG_DIR/config.json"
+  echo "✓ Created config.json (updates: notify, digest: every 3 days, progress review: every 3 days / 5 sessions)"
 else
   echo "  config.json already exists — preserving"
 fi
