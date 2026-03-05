@@ -361,7 +361,7 @@ comments, here's what each group does:
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
     "allowUnsandboxedCommands": false,
-    "excludedCommands": ["gh"],
+    "excludedCommands": ["gh:*"],
     "filesystem": {
       "allowWrite": [
         "//REPLACE_WITH_YOUR_WEFT_PATH",
@@ -419,9 +419,19 @@ If you usually launch Claude Code from the terminal:
 claude --dangerously-skip-permissions
 ```
 
-Or add an alias to your shell profile:
+Or add an alias to your shell profile. Include `GH_TOKEN` so that
+`gh` and `git` can authenticate without keychain access (which the
+sandbox blocks). Store the token in macOS Keychain rather than
+hardcoding it — the token stays encrypted and the sandbox blocks
+Claude from reading it (Keychain directory is in read deny,
+`security find-generic-password` is hard-denied):
+
 ```bash
-alias cc='claude --dangerously-skip-permissions'
+# Store your GitHub PAT in Keychain (run once):
+security add-generic-password -a "gh-token" -s "claude-gh-token" -w "<your-pat>" -U
+
+# Alias fetches from Keychain at launch time (add to ~/.zshrc):
+alias cc='GH_TOKEN=$(security find-generic-password -a "gh-token" -s "claude-gh-token" -w) claude --dangerously-skip-permissions'
 ```
 
 **Warning: VS Code extension and sidebar.** As of March 2026, the
@@ -492,12 +502,15 @@ Then start a new Claude Code session and test the sandbox:
 
 ### The two biggest gaps
 
-1. **`gh` runs outside the sandbox.** The GitHub CLI is excluded from
-   the sandbox due to macOS compatibility issues. It has no network
-   proxy restriction. Deny rules block `gh gist create`,
-   `gh api POST/PUT/PATCH`, and `gh release upload`, but commands like
-   `gh pr create` and `gh issue create` remain allowed — and shell
-   expansion within any `gh` argument (e.g.,
+1. **`gh` runs outside the sandbox.** The GitHub CLI must be excluded
+   from the sandbox due to macOS TLS compatibility issues (use
+   `"excludedCommands": ["gh:*"]` — the wildcard suffix is required;
+   plain `["gh"]` only skips the filesystem profile, not the network
+   proxy). This means `gh` has no network proxy restriction. Deny rules
+   block `gh gist create`, `gh api POST/PUT/PATCH`, and
+   `gh release upload`, but commands like `gh pr create` and
+   `gh issue create` remain allowed — and shell expansion within any
+   `gh` argument (e.g.,
    `gh issue create --body "$(cat ~/.ssh/id_rsa)"`) executes
    unsandboxed. This is the widest residual gap.
 
@@ -558,26 +571,37 @@ option clears context and escalates permissions. Do not press Enter
 or spacebar reflexively when the modal appears — arrow to your
 intended option first.
 
-### Git remote operations require a separate terminal
+### Git remote operations: `gh:*` + GH_TOKEN fix
 
-The sandbox blocks access to credential stores (macOS keychain,
-`~/.ssh`) that git needs to authenticate with remote repositories.
-`git push`, `git pull`, and `git fetch` will fail inside Claude Code
-regardless of credential method — the macOS Seatbelt profile interferes
-with Security.framework at the platform level.
+Out of the box, `gh` and `git push/pull/fetch` fail inside the sandbox.
+The root cause is not authentication — it's TLS. The sandbox routes
+traffic through an HTTPS proxy, and Go binaries (including `gh`) use
+macOS Security.framework for cert verification. The Seatbelt profile
+blocks keychain access, so `SecTrustEvaluate` fails with
+`OSStatus -26276`. The `gh` error message ("token is invalid") is
+misleading — `gh` can't even reach GitHub.
 
-**What works inside Claude Code:** All local git operations — commits,
-branching, merging, rebasing, cherry-picking, conflict resolution,
-staging, diffing, log inspection, stashing. This is where most of the
-complexity lives.
+Two changes fix this:
 
-**What you run in your own terminal:** `git push`, `git pull`,
-`git fetch` — anything that authenticates with a remote.
+1. **`"excludedCommands": ["gh:*"]`** in `~/.claude/settings.json`.
+   The wildcard suffix is required — plain `["gh"]` only skips the
+   Seatbelt filesystem profile but does not clear the proxy env vars
+   or exempt from the network sandbox. A commenter on
+   [#10524](https://github.com/anthropics/claude-code/issues/10524)
+   identified the `gh:*` syntax. Related closed issues: #12150,
+   #14162, #29274.
 
-This is a platform limitation of macOS sandboxing, not a configuration
-issue. No `settings.json` adjustment resolves it without either storing
-credentials in plaintext or removing sandbox protections that guard
-credential files.
+2. **Export `GH_TOKEN` in your launch alias** (see Step 4). Store the
+   token in macOS Keychain and fetch it at launch time — never hardcode
+   tokens in shell config. This gives both `gh` and `git` a credential
+   path that doesn't require keychain access from inside the sandbox.
+   `git push/pull/fetch` use libcurl (not Go), so they work through
+   the proxy — but they still need credentials, which the keychain
+   can't provide under Seatbelt. `GH_TOKEN` solves this when `gh` is
+   configured as git's credential helper (`gh auth setup-git`).
+
+With both in place, all `gh` commands and all git remote operations
+work inside Claude Code.
 
 ---
 
