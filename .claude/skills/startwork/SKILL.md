@@ -93,27 +93,47 @@ If no session logs exist, this is the first session. Skip silently.
 
 ### Step 3b: Progress-review check
 
-After reading session logs, check whether a progress review is due:
+After reading session logs, check whether a progress review is due.
+Two gates must both pass.
 
-1. Check for `learning/.progress-review-log.md`. Read the most recent
-   entry's `date` field. If the file doesn't exist, no prior review.
-2. Count session logs since that date (or all logs if no prior review).
-3. If count > 2: dispatch the progress-review skill as a background
+1. Read `~/.config/weft/config.json`. Extract `progressReviewDays`
+   (default 3) and `progressReviewSessions` (default 5).
+2. Read `learning/.progress-review-log.md` for last review date. If
+   file doesn't exist: first run. Set window start to intake date
+   (creation date of `learning/current-state.md` via `stat`).
+3. **Day gate:** compute days since last review. If <
+   `progressReviewDays`, skip silently. First run (no prior review):
+   day gate passes.
+4. **Session gate:** run session-discovery for the review window
+   (`--since <window-start>`). Filter manifest: count only sessions
+   where `userMessageCount >= 10` (substantive sessions). If count <
+   `progressReviewSessions`, skip silently.
+   - **Fallback:** if session-discovery fails, count session logs in
+     `learning/session-logs/` since the window start. Apply
+     `progressReviewSessions` threshold against that count.
+5. Both gates pass → dispatch progress-review as a background
    sub-agent (`subagent_type: "general-purpose"`,
    `run_in_background: true`). Pass it:
+   - The full session-discovery manifest (unfiltered — all sessions
+     go to analysis, threshold filtering was just for the gate)
    - All session log frontmatter for the review period
    - Full contents of `learning/current-state.md`, `learning/goals.md`,
      `learning/arcs.md`
    - List of scaffold files in `learning/scaffolds/` (with dates)
    - `git log --oneline -20`
-   - Data source inventory (what exists, what's missing)
-   - The full contents of `.claude/skills/progress-review/SKILL.md`
    - Contents of `learning/.progress-review-log.md` (for deferred
      findings)
+   - Full contents of `.claude/skills/progress-review/SKILL.md`
    Continue to Step 4 without waiting.
-4. If count ≤ 2: skip silently. No mention to user.
+6. If either gate fails: skip silently. No mention to user.
 
 ### Step 3c: Digest staleness check
+
+**If progress-review was dispatched in step 3b, skip this step.**
+Progress-review handles its own digest dispatch internally and updates
+`.last-digest-timestamp` in its Phase 4.
+
+If step 3b did not fire:
 
 1. Read `learning/.last-digest-timestamp`. If missing, use the oldest
    session log filename date. If no logs exist, use
@@ -343,6 +363,11 @@ Present the session briefing. Three possible responses:
 Only runs if a sub-agent was dispatched in Step 3b or 3c.
 
 ### Session-digest results
+
+If step 3c was skipped because progress-review was dispatched (step
+3b), there are no standalone digest results to present. The progress-
+review sub-agent handles digest internally and includes coverage info
+in its findings.
 
 If a session-digest sub-agent was dispatched in Step 3c:
 - Present its proposed diff to the user
