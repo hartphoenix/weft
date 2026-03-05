@@ -1,15 +1,14 @@
 ---
 name: git-ship
 description: >-
-  Ships working changes through the full git workflow: stage, commit, push,
-  and PR. Invoked only via the /git-ship slash command — never from general
-  conversation about git, shipping, or deployment. Accepts --merge to
-  squash-merge after PR creation, and --dry-run to preview without executing.
+  Ships working changes: stage, commit, create PR via gh. Accepts --merge
+  to squash-merge after PR creation, and --dry-run to preview without
+  executing.
 ---
 
 # /git-ship
 
-Stage → commit → push → PR in one invocation.
+Stage → commit → PR in one invocation. All remote operations use `gh`.
 
 ## Flags
 
@@ -20,74 +19,74 @@ Stage → commit → push → PR in one invocation.
 
 ## Workflow
 
-### 1. Read state (parallel)
+### 1. Preflight (parallel)
 
-Run these simultaneously:
+Run simultaneously:
 - `git status`
 - `git diff --stat` (staged + unstaged)
-- `git log --oneline -5` (commit message style)
-- `git branch -a` (local + remote branches)
-- `git rev-parse --abbrev-ref HEAD` (current branch)
-- Detect the repo's default branch (`main` or `master`)
+- `git log --oneline -5`
+- `git branch -a`
+- `git rev-parse --abbrev-ref HEAD`
+- Detect default branch (`main` or `master`)
+- `gh pr view --json state 2>/dev/null`
+
+**Gate:** if current branch already has an open PR, stop. Report:
+"Branch already has an open PR. Create a fresh branch for new changes."
+
+**Gate:** if on main/master, stop. "Cannot ship directly to main.
+Create a feature branch first."
 
 ### 2. Group and filter changes
 
-Classify changed/untracked files by purpose using paths and diff content.
-
-- **One coherent group:** proceed with all changes
-- **Mixed concerns:** identify the primary group, report the rest:
+- **One coherent group:** proceed
+- **Mixed concerns:** identify primary group, report the rest:
   "Skipping unrelated changes: [file list]"
-- **Ambiguous grouping:** ask the user which changes to ship
+- **Ambiguous:** ask which changes to ship
 
 Never stage `.env`, credentials, or secrets files.
 
 ### 3. Choose branch
 
 ```
-On feature branch + changes fit it     → stay
-On feature branch + changes don't fit  → find or create a matching branch
-On main/master + trivial (single file, → offer: "Push directly to main,
-  docs, config, typo)                    or create a branch?"
-On main/master + non-trivial           → find or create a matching branch
+On feature branch + changes fit       → stay
+On feature branch + changes don't fit → find or create matching branch
 ```
 
-**Finding a matching branch:** scan local and remote branch names for
-relevance to the changes. If a plausible match exists, confirm with the
+**Finding a match:** scan local and remote branch names. Confirm with
 user before switching.
 
-**Creating a branch:** generate a descriptive slug (e.g.,
-`fix-auth-redirect`, `add-session-digest`). Confirm the name with the
-user before creating. Use `git checkout -b <slug>`.
+**Creating:** generate a descriptive slug (e.g., `fix-auth-redirect`).
+Confirm name with user. `git checkout -b <slug>`.
 
 ### 4. Commit
 
-- Stage only the grouped files from step 2
-- Generate a concise commit message (1-2 lines) matching the repo's
-  recent commit style from step 1
+- `git add <file1> <file2> ...` — name each file explicitly
+- Generate a concise commit message (1-2 lines) matching repo's recent
+  style from step 1
 - Append `Co-Authored-By: Claude <noreply@anthropic.com>` trailer
 - Show the message, then commit immediately — do not wait for approval
 
-### 5. Push
+### 5. Push + PR
 
-- New branch: `git push -u origin <branch>`
-- Existing tracked branch: `git push`
-- On failure: report the error and stop
+Use `AskUserQuestion`. Set the question text to:
 
-### 6. PR
+    Push this branch in another terminal:\n\ngit push -u origin <branch>
 
-- Check for existing PR: `gh pr view --json state 2>/dev/null`
-- **PR exists and open:** push already updated it. Report the PR URL.
-- **No PR exists:** create one with `gh pr create` — inferred title from
-  branch name and commits, brief body summarizing changes. Report URL.
-- **Direct-to-main path** (trivial change from step 3): skip PR entirely.
+Options: **Proceed** / **Abort**. On abort, stop.
 
-### 7. Merge (--merge flag only)
+After confirmation: `gh pr create` — inferred title from branch name
+and commits, brief body summarizing changes. Report URL.
+
+### 6. Merge (--merge flag only)
 
 - `gh pr merge --squash --delete-branch`
-- If merge fails (checks pending, review required): report status and stop
-- After successful merge: `git checkout <default-branch> && git pull`
+- If merge fails (checks pending, review required): report status, stop
+- After merge: `git checkout <default-branch>`. Print pull command in a
+  fenced code block and prompt with `AskUserQuestion` to sync locally.
 
-## Boundaries
+## Constraints
 
-- Never force push or amend existing commits
-- Never merge without the explicit `--merge` flag
+- `git add`: explicit file names only — never `-A`, `.`, `--all`
+- `git commit`: stage first — never `-a` / `--all`
+- All remote operations via `gh` — never `git push`, `git fetch`, `git pull`
+- Never merge without `--merge` flag
