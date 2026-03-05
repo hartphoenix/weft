@@ -361,7 +361,7 @@ comments, here's what each group does:
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
     "allowUnsandboxedCommands": false,
-    "excludedCommands": ["gh"],
+    "excludedCommands": ["gh", "git"],
     "filesystem": {
       "allowWrite": [
         "//REPLACE_WITH_YOUR_WEFT_PATH",
