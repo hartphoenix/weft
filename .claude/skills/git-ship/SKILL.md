@@ -68,16 +68,24 @@ Confirm name with user. `git checkout -b <slug>`.
 
 ### 5. Push + PR
 
-`gh pr create` — inferred title from branch name and commits, brief
-body summarizing changes. Reports URL. (`gh pr create` auto-pushes an
-unpushed branch.)
+Print the exact push command in a fenced code block for copy-paste:
+
+```
+git push -u origin <branch>
+```
+
+Use `AskUserQuestion`: "Run the command above in another terminal, then
+choose Proceed." Options: **Proceed** / **Abort**. On abort, stop.
+
+After confirmation: `gh pr create` — inferred title from branch name
+and commits, brief body summarizing changes. Report URL.
 
 ### 6. Merge (--merge flag only)
 
 - `gh pr merge --squash --delete-branch`
 - If merge fails (checks pending, review required): report status, stop
-- After merge: `git checkout <default-branch>`. Local sync from remote
-  requires manual action (`gh` has no pull equivalent).
+- After merge: `git checkout <default-branch>`. Print pull command in a
+  fenced code block and prompt with `AskUserQuestion` to sync locally.
 
 ## Constraints
 
