@@ -68,14 +68,11 @@ Confirm name with user. `git checkout -b <slug>`.
 
 ### 5. Push + PR
 
-Print the exact push command in a fenced code block for copy-paste:
+Use `AskUserQuestion`. Set the question text to:
 
-```
-git push -u origin <branch>
-```
+    Push this branch in another terminal:\n\ngit push -u origin <branch>
 
-Use `AskUserQuestion`: "Run the command above in another terminal, then
-choose Proceed." Options: **Proceed** / **Abort**. On abort, stop.
+Options: **Proceed** / **Abort**. On abort, stop.
 
 After confirmation: `gh pr create` — inferred title from branch name
 and commits, brief body summarizing changes. Report URL.
