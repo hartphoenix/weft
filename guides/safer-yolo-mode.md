@@ -361,7 +361,7 @@ comments, here's what each group does:
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
     "allowUnsandboxedCommands": false,
-    "excludedCommands": ["gh", "git"],
+    "excludedCommands": ["gh"],
     "filesystem": {
       "allowWrite": [
         "//REPLACE_WITH_YOUR_WEFT_PATH",
@@ -512,6 +512,27 @@ Then start a new Claude Code session and test the sandbox:
   could instruct Claude to set this parameter, which bypasses the
   sandbox for individual commands. Agent-facing invariants prohibit it,
   but it's a model-level control, not structural.
+
+### Git remote operations require a separate terminal
+
+The sandbox blocks access to credential stores (macOS keychain,
+`~/.ssh`) that git needs to authenticate with remote repositories.
+`git push`, `git pull`, and `git fetch` will fail inside Claude Code
+regardless of credential method — the macOS Seatbelt profile interferes
+with Security.framework at the platform level.
+
+**What works inside Claude Code:** All local git operations — commits,
+branching, merging, rebasing, cherry-picking, conflict resolution,
+staging, diffing, log inspection, stashing. This is where most of the
+complexity lives.
+
+**What you run in your own terminal:** `git push`, `git pull`,
+`git fetch` — anything that authenticates with a remote.
+
+This is a platform limitation of macOS sandboxing, not a configuration
+issue. No `settings.json` adjustment resolves it without either storing
+credentials in plaintext or removing sandbox protections that guard
+credential files.
 
 ---
 
