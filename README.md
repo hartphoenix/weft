@@ -51,7 +51,7 @@ Bootstrap does four things:
 1. Registers skills globally so they're available in any project
 2. Registers a session-start hook that checks your learning state
 3. Writes a path-resolution section to `~/.claude/CLAUDE.md`
-4. Creates a config directory (`~/.config/weft/`) with your update preference
+4. Creates a config directory (`~/.config/weft/`) with update and digest preferences
 
 Everything is tracked in a manifest (`~/.config/weft/manifest.json`)
 and backed up. Run `bash scripts/uninstall.sh` to reverse it cleanly.
@@ -111,13 +111,25 @@ to `/clear` first to start a fresh session:
 
 ## The learning loop
 
-The harness improves your profile every time you use it. Here's the
-cycle:
+The harness improves your profile every time you use it. There are
+two update paths — active and passive — and they reinforce each other.
 
-1. **Work** — use Claude Code normally in any project
-2. **Review** — run `/session-review` when you finish a work session.
-   It analyzes what you did, quizzes you on 4-6 concepts, and updates
-   your scores and gap classifications.
+1. **Work** — use Claude Code normally in any project.
+2. **Update** — your learning state updates through either path:
+   - **Active:** run `/session-review` when you finish a session. It
+     analyzes what you did, quizzes you on 4-6 concepts, and updates
+     your scores and gap classifications.
+   - **Passive:** two complementary triggers keep your profile current
+     without manual action:
+     - `/startwork` auto-dispatches `/session-digest` when 3+ sessions
+       are undigested.
+     - The **session-start hook** nudges you to run `/session-digest`
+       when your profile hasn't updated in a configurable number of
+       days (default: 3). Existing users get a one-time introduction
+       to configure this.
+     - Either way, digest reads your session transcripts, extracts
+       growth-edge evidence, and proposes score updates — no quiz
+       required. You approve or skip each change.
 3. **Plan** — next time you start working, `/startwork` reads your
    updated state and proposes what to focus on. It runs automatically
    at session start via the hook, or invoke it directly.
@@ -127,8 +139,8 @@ cycle:
    `/progress-review` directly anytime.
 
 The more sessions you complete, the sharper the system gets. Concept
-scores are quiz-verified, not self-reported — so the profile converges
-on reality.
+scores are either quiz-verified or evidence-observed, never
+self-reported — so the profile converges on reality.
 
 ## Privacy
 
@@ -159,21 +171,23 @@ All skills are invoked with `/skill-name` in Claude Code.
 | Skill | What it does |
 |-------|-------------|
 | **/intake** | Onboarding interview — bootstraps your profile from background materials and conversation |
-| **/startwork** | Session planner — reads your state and proposes what to focus on |
+| **/startwork** | Session planner — reads git status, learning state, schedule, and project context to propose a time-budgeted plan |
 | **/session-review** | End-of-session analysis, quiz, and learning state update |
-| **/session-digest** | Lightweight state update from session transcripts — no quiz, just evidence |
+| **/session-digest** | Lightweight learning-state diff from session evidence — no quiz, no file writes. Callers handle approval |
 | **/progress-review** | Cross-session pattern analysis — detects stalls, regressions, and goal drift |
 
 ### Working tools
 
 | Skill | What it does |
 |-------|-------------|
-| **/lesson-scaffold** | Paste a URL to a lesson plan or tutorial – Adapts the plan to fit your learning style & goals. |
-| **/quick-ref** | Fast, direct answers. Flags structural gaps in one sentence. |
-| **/debugger** | Visibility-first debugging — gets the full error before guessing |
-| **/handoff-test** | Run this to audit Claude's work artifacts for self-containedness before compaction/clear, so the next session or agent starts with a full game plan. |
-| **/handoff-prompt** | Run this to generate a handoff prompt for the next agent when context is running low |
+| **/lesson-scaffold** | Restructures learning materials (URL, file, or pasted text) into a conceptual scaffold shaped to your current level |
+| **/quick-ref** | Direct, concise answers to factual and structural questions. Flags the bigger picture in one sentence when relevant |
+| **/debugger** | Guides debugging when something breaks — collects full error context, prompts for hypotheses, rescopes when stuck |
+| **/handoff-test** | Audits session artifacts for self-containedness before context is lost. Identifies what the artifact assumes but doesn't say |
+| **/handoff-prompt** | Generates a handoff prompt for the next agent when context is running low |
 | **/git-ship** | Full git workflow in one command — stage, commit, push, and PR. `--merge` to squash-merge, `--dry-run` to preview |
+| **/persist** | Saves the current plan to `plans/` with a descriptive name. Use after plan approval or before compaction |
+| **/skill-sharpen** | Guides toward token-efficient, behaviorally precise prose when editing SKILL.md files or agent-facing instruction documents |
 
 ### Automatic dispatch
 
@@ -183,11 +197,20 @@ Some skills run automatically without you invoking them:
   undigested, updating your learning state from transcript evidence.
 - **/startwork** dispatches **/progress-review** when 3+ sessions have
   accumulated since the last review, but you can also run it yourself.
-- The **session-start hook** checks your learning state and suggests
-  `/intake` if you haven't run it, or `/startwork` if your profile
-  hasn't updated recently.
+- The **session-start hook** checks your learning state at session
+  start. It suggests `/intake` if you haven't onboarded, `/startwork`
+  if you've been away, and `/session-digest` if your profile hasn't
+  been updated in a few days (configurable — see **Settings** below).
+  Existing users who haven't configured digest yet get a one-time
+  introduction.
+- **/session-discovery** is infrastructure — it finds prior Claude Code
+  sessions on your machine. You never invoke it directly; other skills
+  (session-review, session-digest, startwork, progress-review) use it
+  to gather evidence.
 - **/quick-ref** and **/debugger** activate contextually based on what
   you're doing — no slash command needed.
+- **/skill-sharpen** activates contextually when you're editing skill
+  files.
 
 ## Everything is editable
 
@@ -195,6 +218,21 @@ The intake gives you a starting point, not a lock-in. Every generated
 file is plain markdown. Edit `~/.claude/CLAUDE.md` to change how the system
 behaves. Edit `learning/current-state.md` to correct a score. The
 system reads what's there — if you change it, it adapts.
+
+## Settings
+
+Preferences live in `~/.config/weft/config.json`. You can edit the
+file directly or ask Claude to adjust your Weft settings.
+
+| Key | Values | Default | What it controls |
+|-----|--------|---------|-----------------|
+| `updates` | `"notify"` \| `"auto"` \| `"off"` | `"notify"` | Harness update check at session start |
+| `digestInterval` | positive integer (days) | `3` | How often the hook suggests running `/session-digest` |
+| `digestMode` | `"suggest"` \| `"off"` | `"suggest"` | Whether the hook nudges for digest at all |
+
+All keys are optional — missing keys use their defaults. New users
+configure digest preferences during `/intake`. Existing users are
+prompted once at session start to set their preference.
 
 ## Update
 
@@ -263,7 +301,7 @@ debugging or customizing.
 | `learning/scaffolds/` | lesson-scaffold | Restructured learning materials with concept classifications |
 | `learning/relationships.md` | intake (if opted in) | Teacher/mentor handles and signal repo config |
 | `learning/.intake-notes.md` | intake | Resume checkpoint if intake is interrupted mid-interview |
-| `learning/.last-digest-timestamp` | session-digest | Date of last digest — controls the discovery window |
+| `learning/.last-digest-timestamp` | intake / session-digest | Date of last digest — controls the discovery window. Seeded by intake so the first session doesn't nudge immediately |
 | `learning/.progress-review-log.md` | progress-review | Tracks review windows and deferred findings |
 
 ### Session-start hook
@@ -273,6 +311,8 @@ When you open Claude Code, a hook runs automatically. It checks:
 - Whether you've run `/intake` yet (suggests it if not)
 - Whether a previous `/intake` was interrupted (offers to resume)
 - Whether your learning profile is stale (suggests `/startwork`)
+- Whether your profile needs a digest update (suggests `/session-digest`)
+- Whether new skills need linking (suggests re-running bootstrap)
 - Whether harness updates are available (if `"updates": "notify"`)
 
 ## Uninstall
@@ -295,6 +335,15 @@ to re-register. Bootstrap is idempotent — safe to run multiple times.
 
 **Session-review says no learning state:** Run `/intake` first. The
 review needs the profile that intake creates.
+
+**Digest nudge appearing every session:** Your `digestInterval` may be
+set too low, or `learning/.last-digest-timestamp` is missing. Check
+`~/.config/weft/config.json` and verify the timestamp file exists in
+your learning directory.
+
+**Want to disable the digest nudge:** Set `"digestMode": "off"` in
+`~/.config/weft/config.json`, or ask Claude to turn off digest
+suggestions.
 
 **Update check not working:** Verify your weft directory is a git
 repo with a remote: `cd ~/weft && git remote -v`. The hook fetches

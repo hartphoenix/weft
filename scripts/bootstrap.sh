@@ -47,6 +47,16 @@ fi
 mkdir -p "$BACKUP_DIR"
 echo "$HARNESS_ROOT" > "$CONFIG_DIR/root"
 
+# Learning state may live in a separate repo (e.g., private git repo).
+# If learningRoot is set in config.json, learning/* paths resolve there.
+LEARNING_ROOT="$HARNESS_ROOT"
+if [ -f "$CONFIG_DIR/config.json" ]; then
+  LR=$(jq -r '.learningRoot // empty' "$CONFIG_DIR/config.json" 2>/dev/null || true)
+  if [ -n "$LR" ]; then
+    LEARNING_ROOT="$LR"
+  fi
+fi
+
 # ── Backup existing files ────────────────────────────────────────────
 
 mkdir -p "$CLAUDE_DIR"
@@ -166,6 +176,20 @@ else
   echo "  Directory permissions already registered — skipping"
 fi
 
+# If learning root differs, register it too
+if [ "$LEARNING_ROOT" != "$HARNESS_ROOT" ]; then
+  if ! echo "$EXISTING" | grep -qF "$LEARNING_ROOT"; then
+    jq --arg dir "$LEARNING_ROOT" '
+      .permissions.additionalDirectories = (
+        (.permissions.additionalDirectories // []) + [$dir]
+      )
+    ' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
+    echo "✓ Registered learning root directory permissions"
+  else
+    echo "  Learning root permissions already registered — skipping"
+  fi
+fi
+
 # ── Register session-start hook ──────────────────────────────────────
 
 HOOK_CMD="bash $HOOKS_DIR/session-start.sh"
@@ -201,20 +225,20 @@ SECTION=$(cat <<SECTION_EOF
 When skills reference harness files, resolve paths from the harness
 root above — not from the current working directory:
 
-- \`learning/*\` → \`$HARNESS_ROOT/learning/*\`
-- \`background/*\` → \`$HARNESS_ROOT/background/*\`
+- \`learning/*\` → \`$LEARNING_ROOT/learning/*\`
+- \`background/*\` → \`$LEARNING_ROOT/background/*\`
 - \`.claude/references/*\` → \`$HARNESS_ROOT/.claude/references/*\`
 - \`.claude/consent.json\` → \`$HARNESS_ROOT/.claude/consent.json\`
 
 When a skill says "read learning/current-state.md", read
-\`$HARNESS_ROOT/learning/current-state.md\`.
+\`$LEARNING_ROOT/learning/current-state.md\`.
 
 ### Architecture
 
 Skills: \`$HARNESS_ROOT/.claude/skills/\` (symlinked globally)
 References: \`$HARNESS_ROOT/.claude/references/\`
-Learning state: \`$HARNESS_ROOT/learning/\`
-Background materials: \`$HARNESS_ROOT/background/\`
+Learning state: \`$LEARNING_ROOT/learning/\`
+Background materials: \`$LEARNING_ROOT/background/\`
 <!-- weft:end -->
 SECTION_EOF
 )
@@ -261,16 +285,16 @@ fi
 # The session-start hook reads updates preference from this file.
 
 if [ ! -f "$CONFIG_DIR/config.json" ]; then
-  echo '{ "updates": "notify" }' > "$CONFIG_DIR/config.json"
-  echo "✓ Created config.json (update preference: notify)"
+  echo '{ "updates": "notify", "digestInterval": 3, "digestMode": "suggest" }' > "$CONFIG_DIR/config.json"
+  echo "✓ Created config.json (update preference: notify, digest: every 3 days)"
 else
   echo "  config.json already exists — preserving"
 fi
 
 # ── Ensure directories ───────────────────────────────────────────────
 
-mkdir -p "$HARNESS_ROOT/learning/session-logs"
-mkdir -p "$HARNESS_ROOT/background"
+mkdir -p "$LEARNING_ROOT/learning/session-logs"
+mkdir -p "$LEARNING_ROOT/background"
 
 # ── Write manifest ───────────────────────────────────────────────────
 
@@ -320,8 +344,8 @@ echo "  Skills linked: $SKILL_COUNT"
 if [ "$SKIP_COUNT" -gt 0 ]; then
 echo "  Skills skipped: $SKIP_COUNT (pre-existing)"
 fi
-echo "  Learning:      $HARNESS_ROOT/learning/"
-echo "  Background:    $HARNESS_ROOT/background/"
+echo "  Learning:      $LEARNING_ROOT/learning/"
+echo "  Background:    $LEARNING_ROOT/background/"
 echo "  Manifest:      $MANIFEST_FILE"
 echo ""
 echo "  Next steps:"

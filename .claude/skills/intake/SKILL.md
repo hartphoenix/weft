@@ -488,7 +488,53 @@ is editable. Recommend the getting-started guide as the next step:
 /lesson-scaffold guides/getting-started.md
 ```
 
-### 4d. Data sharing (optional)
+### 4d. Harness settings
+
+> One more thing — Weft keeps your learning profile current by
+> periodically checking your recent Claude sessions for new evidence.
+> Every few sessions, it'll suggest updates to your profile. You
+> always review and approve before anything changes.
+>
+> The default is to check every 3 days. You can change the interval
+> or turn it off anytime — just ask Claude to adjust your Weft
+> settings.
+
+Then ask:
+
+> Does every 3 days sound right, or would you prefer a different
+> interval?
+
+Accept natural language ("that's fine", "make it weekly", "turn it
+off"). Map to config values:
+
+| Response | digestInterval | digestMode |
+|----------|---------------|------------|
+| Default / "fine" / "sure" | 3 | "suggest" |
+| "weekly" / "once a week" | 7 | "suggest" |
+| Specific number | N | "suggest" |
+| "off" / "don't want that" | — | "off" |
+
+Write the preference to `~/.config/weft/config.json`. Read the
+existing file first (it may have an `updates` key from bootstrap).
+Merge — don't overwrite.
+
+Example resulting config:
+```json
+{ "updates": "notify", "digestInterval": 3, "digestMode": "suggest" }
+```
+
+If the user declines or says "off", still write `digestMode: "off"`
+so the hook knows to skip.
+
+**Seed the digest timestamp.** After writing config, also create
+`learning/.last-digest-timestamp` with today's date (YYYY-MM-DD).
+This prevents the very next session from nudging a digest when there's
+nothing to digest yet — the window starts from post-intake.
+
+**Keep it brief.** This is a 30-second interaction, not a settings
+walkthrough. One explanation, one question, one write.
+
+### 4e. Data sharing (optional)
 
 > One more thing — this harness can share your learning data to
 > GitHub. Two things happen if you opt in:
@@ -559,7 +605,7 @@ If they agree:
    > `learning/relationships.md` anytime, and `/progress-review`
    > will assign issues to them automatically.
 
-### 4e. Clean up
+### 4f. Clean up
 
 After all approved files are written, delete `learning/.intake-notes.md`
 — it has served its purpose. The learning files are the permanent record.

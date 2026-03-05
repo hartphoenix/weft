@@ -34,10 +34,16 @@ if [ -z "$WEFT_ROOT" ]; then
   WEFT_ROOT="$CWD"
 fi
 
-# Learning state lives at the harness root (from ~/.config/weft/root).
+# Learning state may live in a separate repo (e.g., private git repo).
 # Package operations (update check, skill registration) use the repo
 # this hook script lives in — which may differ from the learning root.
 LEARNING_ROOT="$WEFT_ROOT"
+if [ -f "$HOME/.config/weft/config.json" ]; then
+  LR=$(jq -r '.learningRoot // empty' "$HOME/.config/weft/config.json" 2>/dev/null || true)
+  if [ -n "$LR" ]; then
+    LEARNING_ROOT="$LR"
+  fi
+fi
 PACKAGE_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 LEARNING_DIR="$LEARNING_ROOT/learning"
@@ -76,6 +82,21 @@ if [ ! -f "$LEARNING_DIR/current-state.md" ]; then
   exit 0
 fi
 
+# ── Config + timestamp (shared by digest check and update check) ──────
+
+CONFIG_FILE="$HOME/.config/weft/config.json"
+NOW=$(date +%s)
+
+if [ -f "$CONFIG_FILE" ]; then
+  DIGEST_INTERVAL=$(jq -r '.digestInterval // 3' "$CONFIG_FILE" 2>/dev/null || echo "3")
+  DIGEST_MODE=$(jq -r '.digestMode // "suggest"' "$CONFIG_FILE" 2>/dev/null || echo "suggest")
+  UPDATE_PREF=$(jq -r '.updates // "notify"' "$CONFIG_FILE" 2>/dev/null || echo "notify")
+else
+  DIGEST_INTERVAL=3
+  DIGEST_MODE="suggest"
+  UPDATE_PREF="notify"
+fi
+
 # ── Condition 4: Has state, check for recent activity ─────────────────
 
 SESSION_LOG_DIR="$LEARNING_DIR/session-logs"
@@ -89,24 +110,52 @@ if [ "$RECENT_LOGS" -eq 0 ]; then
   CONTEXT_PARTS+=("This user has a learning profile but no session logs in the past week. They may be returning after a break. Suggest /startwork to plan a new session based on their goals and progress, or /lesson-scaffold to adapt a specific resource into a customized lesson.")
 fi
 
-# ── Condition 5: Schedule check (stub) ────────────────────────────────
+# ── Condition 5: Digest staleness ─────────────────────────────────────
+
+# Detect whether digest preferences have been explicitly configured.
+# Existing users who ran intake before this feature won't have these
+# keys — introduce the feature and ask before nudging.
+DIGEST_CONFIGURED="false"
+if [ -f "$CONFIG_FILE" ]; then
+  DIGEST_CONFIGURED=$(jq 'has("digestInterval")' "$CONFIG_FILE" 2>/dev/null || echo "false")
+fi
+
+if [ "$DIGEST_CONFIGURED" = "false" ]; then
+  # One-time introduction for existing users (fires once, then never again)
+  CONTEXT_PARTS+=("Weft has a new feature this user hasn't configured yet: periodic learning-profile digests. The harness can check recent Claude sessions every few days and suggest updates to the learning profile — the user always reviews and approves before anything changes. Briefly introduce this and ask: would they like digest suggestions every 3 days (default), a different interval, or to turn it off? Write their preference to ~/.config/weft/config.json (read existing file first if present, merge — don't overwrite; set digestInterval as number of days, digestMode as \"suggest\" or \"off\"). Also create $LEARNING_DIR/.last-digest-timestamp with today's date (YYYY-MM-DD) so the digest window starts fresh.")
+elif [ "$DIGEST_MODE" != "off" ]; then
+  LAST_DIGEST_FILE="$LEARNING_DIR/.last-digest-timestamp"
+  if [ -f "$LAST_DIGEST_FILE" ]; then
+    LAST_DIGEST=$(cat "$LAST_DIGEST_FILE" 2>/dev/null || echo "")
+    if [ -n "$LAST_DIGEST" ]; then
+      # Cross-platform date parsing: macOS (-j -f) then Linux (-d)
+      LAST_DIGEST_EPOCH=$(date -j -f "%Y-%m-%d" "$LAST_DIGEST" +%s 2>/dev/null || date -d "$LAST_DIGEST" +%s 2>/dev/null || echo "0")
+      DAYS_SINCE=$(( (NOW - LAST_DIGEST_EPOCH) / 86400 ))
+    else
+      DAYS_SINCE=999
+    fi
+  else
+    DAYS_SINCE=999
+  fi
+
+  if [ "$DAYS_SINCE" -gt "$DIGEST_INTERVAL" ]; then
+    if [ "$DAYS_SINCE" -eq 999 ]; then
+      CONTEXT_PARTS+=("This user's learning profile hasn't been updated by digest yet. Offer to run /session-digest — a quick analysis of recent sessions that surfaces proposed updates for them to approve.")
+    else
+      CONTEXT_PARTS+=("This user's learning profile hasn't been updated in $DAYS_SINCE days. Offer to run /session-digest — a quick analysis of recent sessions that surfaces proposed updates for them to approve.")
+    fi
+  fi
+fi
+
+# ── Condition 6: Schedule check (stub) ────────────────────────────────
 # TODO: Check for schedule.md or deadline files and surface upcoming deadlines.
 
 # ── Update check ──────────────────────────────────────────────────────
-# Reads update preference from config.json and checks for new commits.
 
-CONFIG_FILE="$HOME/.config/weft/config.json"
 LAST_FETCH_FILE="$HOME/.config/weft/last-fetch"
-
-if [ -f "$CONFIG_FILE" ]; then
-  UPDATE_PREF=$(jq -r '.updates // "notify"' "$CONFIG_FILE" 2>/dev/null || echo "notify")
-else
-  UPDATE_PREF="notify"
-fi
 
 if [ "$UPDATE_PREF" != "off" ] && [ -d "$PACKAGE_ROOT/.git" ]; then
   # Check if a fetch is due (>24h since last fetch)
-  NOW=$(date +%s)
   LAST_FETCH=0
   if [ -f "$LAST_FETCH_FILE" ]; then
     LAST_FETCH=$(cat "$LAST_FETCH_FILE" 2>/dev/null || echo "0")
