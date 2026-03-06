@@ -35,34 +35,38 @@ not the current working directory. If needed, read
       wrote this file.
    d. If none of the above exist, default to 30 days ago. This is a
       safety bound for misconfigured installs, not a normal case.
-3. Run session-discovery:
+3. Run session-discovery with paths-only output:
    ```bash
-   bun run "$(cat ~/.config/weft/root)/scripts/session-discovery.ts" --since <window-start>
+   bun run "$(cat ~/.config/weft/root)/scripts/session-discovery.ts" \
+     --since <window-start> --min-user-messages 5 --paths-only
    ```
-   If session-discovery fails (bun not available, script not found, exit
-   non-zero): report the failure to the user and exit. Unlike
-   session-review (which can fall back to git history + current
-   conversation), digest has no useful fallback — it exists to read
-   session transcripts, and without session-discovery it can't find them.
-4. Filter the manifest: exclude any session that started after this
-   skill was invoked (the current session would appear in the manifest
-   since its JSONL is being written to disk).
-5. If 0 sessions remain, report "no undigested sessions" and exit.
-6. Proceed directly to Phase 2. If the caller wants confirmation
+   If the command fails: report the failure and exit.
+   If output is empty: report "no undigested sessions" and exit.
+   Each output line is a JSONL file path for Phase 2.
+4. Proceed directly to Phase 2. If the caller wants confirmation
    (e.g., first-run warning), they handle it before dispatching.
 
 ## Phase 2: Extract
 
-Context management gate (same thresholds as session-review):
+For each session in the manifest, run session-extract:
 
-| Manifest data | Strategy |
-|---|---|
-| 0-1 sessions AND total messageCount < 200 | Inline: read JSONL(s) directly |
-| 2-3 sessions OR total messageCount 200-500 | Single sub-agent with all JSONL paths |
-| 4+ sessions OR total messageCount > 500 | Parallel sub-agents — one per session JSONL |
+```bash
+bun run "$(cat ~/.config/weft/root)/scripts/session-extract.ts" <filePath>
+```
+
+If session-extract fails (script not found, bun error, exit non-zero):
+report the failure and exit. Do not attempt to parse raw JSONL
+directly — the tool budget required makes synthesis impossible.
+
+### Context management gate
+
+| Sessions | Strategy |
+|----------|----------|
+| 1 | Inline: run session-extract, process output directly |
+| 2-3 | Single sub-agent with all session-extract outputs |
+| 4+ | Parallel sub-agents — one per session |
 
 Each reader (inline or sub-agent) receives:
-- The JSONL file path
 - Current `learning/current-state.md` (so it knows existing concepts/scores)
 - Instructions to extract:
 
@@ -79,11 +83,11 @@ procedural_observations:
   - [workflow patterns, tool usage, debugging approach — brief]
 ```
 
-### Filtering instructions
+### What to look for in extracted text
 
 What counts as a growth-edge encounter (extract these):
 - New concept exposure
-- Struggle/debugging that reveals a gap
+- Struggle/debugging that reveals a gap (tool errors are marked with `x`)
 - Breakthrough that demonstrates fluency change
 - Teaching/explaining a concept (shows depth)
 - Deepening — using a concept in a novel context or combining it
@@ -91,15 +95,7 @@ What counts as a growth-edge encounter (extract these):
 What doesn't count (skip these):
 - Routine use of a familiar concept without struggle
 - Pure orchestration ("commit push merge")
-- File listing, routine tool calls
-- IDE metadata, system reminders
-
-Sub-agent noise filtering (same patterns as session-review):
-- Filter to `user` and `assistant` message types only
-- Skip blocks starting with: `<ide_opened_file>`, `<system-reminder>`,
-  `<command-message>`, `<command-name>`, `<local-command`
-- Focus on: error debugging, user explanations, new concepts introduced,
-  code written/reviewed, design decisions articulated
+- Routine tool calls
 
 ## Phase 3: Synthesize
 
@@ -215,6 +211,7 @@ per the Standalone Invocation section above.)
 
 | Skill | How session-digest interoperates |
 |---|---|
+| **session-extract** | Consumes: runs the script per session to convert raw JSONL into filtered readable text for Phase 2 extraction. |
 | **session-discovery** | Consumes: runs the script, uses the manifest |
 | **session-review** | Upstream dependency. Session-review dispatches digest as foreground sub-agent for evidence gathering. Digest returns structured diff; review uses it for quiz-target selection and state updates. |
 | **progress-review** | Downstream consumer: reads current-state.md entries written by digest callers. Source tag lets it weight evidence. |

@@ -45,7 +45,8 @@ When running as a sub-agent:
      manifest as your session list: [manifest JSON]. Proceed directly
      to Phase 2 Extract for these sessions. Return structured diff
      per your Output Format section."
-   Receive the structured diff.
+   Receive the structured diff. (Do not parse JSONL directly — digest
+   handles extraction.)
 4. Proceed to Phase 1 with session log data + digest output.
 
 If session-discovery manifest was not passed (startwork failed to run

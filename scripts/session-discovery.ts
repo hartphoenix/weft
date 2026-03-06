@@ -61,6 +61,8 @@ const { values: args } = parseArgs({
     since: { type: "string" },
     until: { type: "string" },
     project: { type: "string" },
+    "min-user-messages": { type: "string" },
+    "paths-only": { type: "boolean", default: false },
   },
   strict: true,
 });
@@ -69,6 +71,8 @@ const today = new Date().toISOString().slice(0, 10);
 const sinceDate = args.since ?? today;
 const untilDate = args.until ?? today;
 const projectFilter = args.project?.toLowerCase() ?? null;
+const minUserMessages = parseInt(args["min-user-messages"] ?? "0", 10);
+const pathsOnly = args["paths-only"] ?? false;
 
 // Convert date boundaries to full ISO timestamps for comparison
 const sinceISO = `${sinceDate}T00:00:00.000Z`;
@@ -332,20 +336,31 @@ async function main() {
 
   sessions.sort((a, b) => a.start.localeCompare(b.start));
 
-  const meta: DiscoveryMeta = {
-    claudeDir,
-    since: sinceDate,
-    until: untilDate,
-    filesScanned,
-    sessionsMatched: sessions.length,
-    errors,
-  };
+  // Apply post-collection filters
+  const filtered = minUserMessages > 0
+    ? sessions.filter((s) => s.userMessageCount >= minUserMessages)
+    : sessions;
 
-  const output = { meta, sessions };
-  console.log(JSON.stringify(output, null, 2));
+  if (pathsOnly) {
+    for (const s of filtered) {
+      console.log(s.filePath);
+    }
+  } else {
+    const meta: DiscoveryMeta = {
+      claudeDir,
+      since: sinceDate,
+      until: untilDate,
+      filesScanned,
+      sessionsMatched: filtered.length,
+      errors,
+    };
+
+    const output = { meta, sessions: filtered };
+    console.log(JSON.stringify(output, null, 2));
+  }
 
   console.error(
-    `[session-discovery] Done. Scanned ${filesScanned} files, found ${sessions.length} session(s).`
+    `[session-discovery] Done. Scanned ${filesScanned} files, found ${filtered.length} session(s)${minUserMessages > 0 ? ` (filtered from ${sessions.length}, min ${minUserMessages} user messages)` : ""}.`
   );
 }
 
