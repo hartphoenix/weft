@@ -47,6 +47,16 @@ is_env_file() {
   esac
 }
 
+# --- Category 4: Git-internal file check ---
+
+is_git_internal() {
+  local path="$1"
+  case "$path" in
+    */.gitmodules) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 case "$TOOL_NAME" in
   Write|Edit)
     FILE_PATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty')
@@ -56,6 +66,9 @@ case "$TOOL_NAME" in
       fi
       if is_env_file "$FILE_PATH"; then
         emit_ask "Environment file write: $FILE_PATH"
+      fi
+      if is_git_internal "$FILE_PATH"; then
+        emit_ask "Git-internal file write: $FILE_PATH"
       fi
     fi
     ;;

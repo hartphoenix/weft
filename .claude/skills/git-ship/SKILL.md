@@ -8,7 +8,7 @@ description: >-
 
 # /git-ship
 
-Stage → commit → PR in one invocation. All remote operations use `gh`.
+Stage → commit → push → PR in one invocation.
 
 ## Flags
 
@@ -68,25 +68,24 @@ Confirm name with user. `git checkout -b <slug>`.
 
 ### 5. Push + PR
 
-Use `AskUserQuestion`. Set the question text to:
+Use `AskUserQuestion`: "Ready to push and open PR for `<branch>`."
+Options: **Push** / **Abort**. On abort, stop.
 
-    Push this branch in another terminal:\n\ngit push -u origin <branch>
-
-Options: **Proceed** / **Abort**. On abort, stop.
-
-After confirmation: `gh pr create` — inferred title from branch name
-and commits, brief body summarizing changes. Report URL.
+After confirmation:
+- `git push -u origin <branch>`
+- `gh pr create` — inferred title from branch name and commits, brief
+  body summarizing changes. Report URL.
 
 ### 6. Merge (--merge flag only)
 
 - `gh pr merge --squash --delete-branch`
 - If merge fails (checks pending, review required): report status, stop
-- After merge: `git checkout <default-branch>`. Print pull command in a
-  fenced code block and prompt with `AskUserQuestion` to sync locally.
+- After merge: `git checkout <default-branch> && git pull origin <default-branch>`
 
 ## Constraints
 
 - `git add`: explicit file names only — never `-A`, `.`, `--all`
 - `git commit`: stage first — never `-a` / `--all`
-- All remote operations via `gh` — never `git push`, `git fetch`, `git pull`
+- `git push`: only to `origin` — never to other remotes
+- No force-push
 - Never merge without `--merge` flag
