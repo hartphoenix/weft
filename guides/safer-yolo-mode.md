@@ -112,6 +112,13 @@ is the structural defense against the `.gitignore` edit + `git add` +
 push attack chain — it catches secrets entering git history regardless
 of how they were staged.
 
+### Layer 6: Pre-push secret scanning
+
+A global git hook that scans commits being pushed for secrets that
+bypassed the pre-commit check — commits made before gitleaks was
+installed, or commits from other machines. Uses gitleaks in git-log
+mode to walk the commit range. Skips branch deletions.
+
 ---
 
 ## Setup
@@ -156,6 +163,49 @@ chmod +x ~/.git-hooks/pre-commit
 git config --global core.hooksPath ~/.git-hooks
 ```
 
+### Step 2b: Set up the global pre-push hook
+
+Write this to `~/.git-hooks/pre-push`:
+
+```bash
+#!/usr/bin/env bash
+# Pre-push hook: scan commits being pushed for secrets via gitleaks
+
+remote="$1"
+url="$2"
+zero="0000000000000000000000000000000000000000"
+
+if ! command -v gitleaks &>/dev/null; then
+  exit 0
+fi
+
+while read local_ref local_oid remote_ref remote_oid; do
+  # Skip branch deletions (nothing to scan)
+  if [ "$local_oid" = "$zero" ]; then
+    continue
+  fi
+  if [ "$remote_oid" = "$zero" ]; then
+    range="$local_oid"
+  else
+    range="$remote_oid..$local_oid"
+  fi
+  gitleaks git --log-opts="$range" --no-banner
+  if [ $? -ne 0 ]; then
+    echo "pre-push: gitleaks found secrets in commits being pushed"
+    exit 1
+  fi
+done
+```
+
+Then make it executable:
+
+```bash
+chmod +x ~/.git-hooks/pre-push
+```
+
+No additional git config needed — Step 2 already set `core.hooksPath`
+to `~/.git-hooks`, which covers both hooks.
+
 ### Step 3: Update `~/.claude/settings.json`
 
 This is your global Claude Code settings file. The configuration below
@@ -172,21 +222,24 @@ The deny rules are organized into categories. Since JSON doesn't support
 comments, here's what each group does:
 
 - **Lines 3–13:** Filesystem destruction and privilege escalation
-- **Lines 15–42:** Git history destruction, bulk staging, and
+- **Lines 15–60:** Git history destruction, bulk staging, and
   secret-file staging
-- **Lines 44–60:** Network exfiltration (curl POST/PUT, netcat, scp,
+- **Lines 62–144:** Git remote exfiltration (remote mutation, direct-URL
+  push, config-based remote manipulation, `--git-dir`/`--work-tree`
+  variants, plumbing push, submodule add, env var overrides, data export)
+- **Lines 146–162:** Network exfiltration (curl POST/PUT, netcat, scp,
   etc.)
-- **Lines 62–75:** GitHub CLI exfiltration and dangerous subcommands
-- **Line 77:** Untrusted package execution (cargo build scripts)
-- **Lines 79–83:** Dangerous permission/ownership changes
-- **Lines 85–90:** Container/infrastructure destruction
-- **Lines 92–95:** Credential exposure (env dumps, keychain access)
-- **Lines 97–107:** Credential reading via Bash (cat/head/tail .env,
+- **Lines 164–177:** GitHub CLI exfiltration and dangerous subcommands
+- **Line 179:** Untrusted package execution (cargo build scripts)
+- **Lines 181–185:** Dangerous permission/ownership changes
+- **Lines 187–192:** Container/infrastructure destruction
+- **Lines 194–197:** Credential exposure (env dumps, keychain access)
+- **Lines 199–209:** Credential reading via Bash (cat/head/tail .env,
   etc.)
-- **Lines 109–122:** Credential file reads via Read tool
-- **Lines 124–143:** Shell config and SSH key modification
+- **Lines 211–224:** Credential file reads via Read tool
+- **Lines 226–245:** Shell config and SSH key modification
   (Edit + Write)
-- **Lines 145–146:** Settings self-modification protection
+- **Lines 247–248:** Settings self-modification protection
 
 ```json
 {
@@ -250,6 +303,89 @@ comments, here's what each group does:
       "Bash(git config --global*)",
       "Bash(git config alias.*)",
       "Bash(git config core.sshCommand*)",
+
+      "Bash(git remote add *)",
+      "Bash(git remote set-url *)",
+      "Bash(git remote rename *)",
+      "Bash(git remote remove *)",
+      "Bash(git remote rm *)",
+      "Bash(git push https://*)",
+      "Bash(git push http://*)",
+      "Bash(git push git@*)",
+      "Bash(git push git://*)",
+      "Bash(git push ssh://*)",
+      "Bash(git push --repo*)",
+      "Bash(git config remote.*)",
+      "Bash(git config --local remote.*)",
+      "Bash(git config --add remote.*)",
+      "Bash(git config --replace-all remote.*)",
+      "Bash(git config --unset remote.*)",
+      "Bash(git config --unset-all remote.*)",
+      "Bash(git config url.*)",
+      "Bash(git config --local url.*)",
+      "Bash(git config --add url.*)",
+      "Bash(git config --replace-all url.*)",
+      "Bash(git -c remote.* *)",
+      "Bash(git -c url.* *)",
+      "Bash(git -C * remote add *)",
+      "Bash(git -C * remote set-url *)",
+      "Bash(git -C * remote rename *)",
+      "Bash(git -C * remote remove *)",
+      "Bash(git -C * remote rm *)",
+      "Bash(git -C * push https://*)",
+      "Bash(git -C * push http://*)",
+      "Bash(git -C * push git@*)",
+      "Bash(git -C * push git://*)",
+      "Bash(git -C * push ssh://*)",
+      "Bash(git -C * config remote.*)",
+      "Bash(git -C * config url.*)",
+      "Bash(git -C * -c remote.* *)",
+      "Bash(git -C * -c url.* *)",
+      "Bash(git --git-dir * remote add *)",
+      "Bash(git --git-dir * remote set-url *)",
+      "Bash(git --git-dir * remote rename *)",
+      "Bash(git --git-dir * remote remove *)",
+      "Bash(git --git-dir * remote rm *)",
+      "Bash(git --git-dir * push https://*)",
+      "Bash(git --git-dir * push http://*)",
+      "Bash(git --git-dir * push git@*)",
+      "Bash(git --git-dir * push git://*)",
+      "Bash(git --git-dir * push ssh://*)",
+      "Bash(git --git-dir * config remote.*)",
+      "Bash(git --git-dir * config url.*)",
+      "Bash(git --work-tree * remote add *)",
+      "Bash(git --work-tree * remote set-url *)",
+      "Bash(git --work-tree * push https://*)",
+      "Bash(git --work-tree * push http://*)",
+      "Bash(git --work-tree * push git@*)",
+      "Bash(git --work-tree * push git://*)",
+      "Bash(git --work-tree * push ssh://*)",
+      "Bash(git send-pack *)",
+      "Bash(git http-push *)",
+      "Bash(git submodule add *)",
+      "Bash(GIT_CONFIG_COUNT=*)",
+      "Bash(GIT_CONFIG_KEY_*)",
+      "Bash(GIT_CONFIG_VALUE_*)",
+      "Bash(GIT_SSH_COMMAND=*)",
+      "Bash(GIT_SSH=*)",
+      "Bash(GIT_ASKPASS=*)",
+      "Bash(GIT_PROXY_COMMAND=*)",
+      "Bash(export GIT_CONFIG_COUNT=*)",
+      "Bash(export GIT_CONFIG_KEY_*)",
+      "Bash(export GIT_CONFIG_VALUE_*)",
+      "Bash(export GIT_SSH_COMMAND=*)",
+      "Bash(export GIT_SSH=*)",
+      "Bash(export GIT_ASKPASS=*)",
+      "Bash(export GIT_PROXY_COMMAND=*)",
+      "Bash(env GIT_CONFIG_COUNT=*)",
+      "Bash(env GIT_CONFIG_KEY_*)",
+      "Bash(env GIT_CONFIG_VALUE_*)",
+      "Bash(env GIT_SSH_COMMAND=*)",
+      "Bash(env GIT_SSH=*)",
+      "Bash(env GIT_ASKPASS=*)",
+      "Bash(env GIT_PROXY_COMMAND=*)",
+      "Bash(git fast-export *)",
+      "Bash(git bundle create *)",
 
       "Bash(curl -X POST*)",
       "Bash(curl -X PUT*)",
@@ -367,6 +503,9 @@ comments, here's what each group does:
         "//REPLACE_WITH_YOUR_WEFT_PATH",
         "//REPLACE_WITH_YOUR_HOME/.claude/CLAUDE.md",
         "//REPLACE_WITH_YOUR_HOME/.config/weft"
+      ],
+      "denyWrite": [
+        "./.gitmodules"
       ]
     }
   },
@@ -489,6 +628,12 @@ Then start a new Claude Code session and test the sandbox:
 - **Hook bypass** — deny rules block `--no-verify` and
   `git config --global`, preventing Claude from disabling the
   pre-commit scanner or redirecting hook paths
+- **Git remote exfiltration** — deny rules block adding
+  attacker-controlled remotes, pushing to arbitrary URLs, manipulating
+  remote config via `git config` or env vars, and exporting repo data
+  via plumbing commands (`send-pack`, `fast-export`, `bundle create`).
+  Sandbox auto-blocks direct `.git/config` writes. `.gitmodules` writes
+  are ask-gated by the guard hook and blocked by `sandbox.denyWrite`.
 
 ### The two biggest gaps
 
@@ -522,6 +667,12 @@ Then start a new Claude Code session and test the sandbox:
   could instruct Claude to set this parameter, which bypasses the
   sandbox for individual commands. Agent-facing invariants prohibit it,
   but it's a model-level control, not structural.
+- **Shell expansion and env var indirection.** `R=remote; git $R add`
+  or `VAR=GIT_SSH_COMMAND; export $VAR=evil` bypass prefix-glob deny
+  rules via variable expansion. The sandbox is the structural defense.
+- **`--git-dir` flag reordering.** Deny rules cover `--git-dir` before
+  `remote`/`push`/`config`, but unusual flag orderings could bypass
+  prefix matching. Same class as the prefix-match limitation above.
 
 ### Plan execution modal bypasses your configuration
 
@@ -649,6 +800,17 @@ is the stronger choice.
   in a terminal outside Claude Code. The deny rule only applies to
   commands Claude executes.
 
+### Pre-push scanning
+
+The pre-push hook complements the pre-commit hook. It scans the commit
+range being pushed, catching secrets in commits that were made before
+gitleaks was installed or on machines without the pre-commit hook. The
+hook skips branch deletions (where there's nothing to scan).
+
+The pre-push hook uses `gitleaks git --log-opts` mode, which walks the
+commit log rather than scanning staged files. This means it checks
+historical commits, not working-tree content.
+
 ### Per-repo hooks
 
 If a repo needs its own pre-commit hooks (linting, formatting, etc.):
@@ -680,7 +842,7 @@ well-configured bypass mode.
 
 This configuration inverts the model: everything is allowed unless
 specifically denied, and a kernel-level sandbox constrains the blast
-radius of anything that slips through. Five layers, each catching what
+radius of anything that slips through. Six layers, each catching what
 the others miss. No single layer is perfect. Together they cover the
 scenarios that actually cause damage.
 
