@@ -45,6 +45,23 @@ themselves), their assigned files, and the extraction table. They
 return their findings using the same output schema. You then merge
 their reports, resolve contradictions, and produce one unified report.
 
+**Conversation archives:** For any `.json` file >500KB in the
+manifest, run the extraction script to check if it's a conversation
+archive. If the script exits 0, it's a valid archive — use the
+extracted output instead of reading raw JSON. If exit 1, treat as a
+regular JSON file.
+
+  # Detection — run --list to check format and triage:
+  bun run "$(cat ~/.config/weft/root)/scripts/conversation-extract.ts" <path> --list
+
+This returns a manifest of conversations. Then extract the most
+relevant ones (prioritize recent, substantive conversations):
+
+  bun run "$(cat ~/.config/weft/root)/scripts/conversation-extract.ts" <path> \
+    --min-messages 5 --max-assistant-chars 300
+
+Read the extracted text instead of the raw JSON.
+
 **Do NOT write any files. Return text only.**
 ```
 
@@ -57,7 +74,7 @@ Include this table in the dispatch prompt:
 | Code files / repos | Languages, frameworks, file structure patterns, naming conventions, code style, README content, commit messages if `.git/` present, test patterns |
 | Resumes / CVs | Background domains, career trajectory, skills claimed, projects highlighted, education |
 | Writing samples | Reasoning patterns, tone, vocabulary, domain interests, self-awareness cues |
-| Conversation exports | Question patterns, help-seeking style, what confuses vs. what flows, reflection depth |
+| Conversation exports | Question patterns, help-seeking style, what confuses vs. what flows, reflection depth. **For claude.ai JSON exports:** use `scripts/conversation-extract.ts` — do not parse raw JSON directly. |
 | Course materials / transcripts | Subject areas, performance indicators, completion status |
 | Other files | Describe what you found and what signals it contains |
 
