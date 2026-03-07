@@ -411,45 +411,66 @@ const { values: cliArgs } = parseArgs({
   strict: true,
 });
 
-if (cliArgs.graph && cliArgs.state && cliArgs.query) {
+if (cliArgs.graph && cliArgs.query) {
   const graph = loadDomainGraph(cliArgs.graph);
-  const state = loadLearnerState(cliArgs.state);
 
-  switch (cliArgs.query) {
-    case "fringe":
-      console.log(JSON.stringify(getOuterFringe(graph, state), null, 2));
-      break;
-    case "priority":
-      console.log(
-        JSON.stringify(
-          getGoalWeightedPriority(graph, state, parseInt(cliArgs.top ?? "10")),
-          null,
-          2
-        )
-      );
-      break;
-    case "practice":
-      if (!cliArgs.concept) {
-        console.error("--concept required for practice query");
+  // Coverage works without learner state (structural validation + arc counts)
+  if (cliArgs.query === "coverage" && !cliArgs.state) {
+    const stubState: LearnerState = {
+      meta: {
+        learnerId: "stub",
+        domainGraphId: graph.meta.id,
+        domainGraphVersion: graph.meta.version,
+        created: new Date().toISOString().slice(0, 10),
+        lastModified: new Date().toISOString().slice(0, 10),
+      },
+      observations: {},
+      goals: [],
+      bridges: [],
+    };
+    console.log(JSON.stringify(getCoverage(graph, stubState), null, 2));
+  } else if (cliArgs.state) {
+    const state = loadLearnerState(cliArgs.state);
+
+    switch (cliArgs.query) {
+      case "fringe":
+        console.log(JSON.stringify(getOuterFringe(graph, state), null, 2));
+        break;
+      case "priority":
+        console.log(
+          JSON.stringify(
+            getGoalWeightedPriority(graph, state, parseInt(cliArgs.top ?? "10")),
+            null,
+            2
+          )
+        );
+        break;
+      case "practice":
+        if (!cliArgs.concept) {
+          console.error("--concept required for practice query");
+          process.exit(1);
+        }
+        console.log(
+          JSON.stringify(
+            { conceptId: cliArgs.concept, mode: getPracticeMode(graph, state, cliArgs.concept) },
+            null,
+            2
+          )
+        );
+        break;
+      case "coverage":
+        console.log(JSON.stringify(getCoverage(graph, state), null, 2));
+        break;
+      case "surmise":
+        console.log(JSON.stringify(getDynamicSurmise(graph, state), null, 2));
+        break;
+      default:
+        console.error(`Unknown query: ${cliArgs.query}`);
+        console.error("Available: fringe, priority, practice, coverage, surmise");
         process.exit(1);
-      }
-      console.log(
-        JSON.stringify(
-          { conceptId: cliArgs.concept, mode: getPracticeMode(graph, state, cliArgs.concept) },
-          null,
-          2
-        )
-      );
-      break;
-    case "coverage":
-      console.log(JSON.stringify(getCoverage(graph, state), null, 2));
-      break;
-    case "surmise":
-      console.log(JSON.stringify(getDynamicSurmise(graph, state), null, 2));
-      break;
-    default:
-      console.error(`Unknown query: ${cliArgs.query}`);
-      console.error("Available: fringe, priority, practice, coverage, surmise");
-      process.exit(1);
+    }
+  } else {
+    console.error("--state required for queries other than coverage");
+    process.exit(1);
   }
 }

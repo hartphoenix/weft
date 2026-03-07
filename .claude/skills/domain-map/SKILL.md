@@ -1,14 +1,23 @@
 ---
 name: domain-map
 description: >-
-  Generates a structured domain graph from source materials. Extracts
-  concepts, prerequisite edges, complexity ranges, and knowing profiles.
-  Use when mapping a new learning domain or building a curriculum graph.
+  Generates a structured domain graph from source materials. Analyzes
+  pedagogical structure to extract concepts, prerequisite edges,
+  complexity ranges, and knowing profiles — including implicit
+  dependencies communicated through sequencing, code examples, and
+  progressive elaboration. Use when mapping a new learning domain or
+  building a curriculum graph.
 ---
 
 # Domain Map
 
-Generate a domain graph from source materials. Five phases.
+Generate a domain graph from source materials. Six phases.
+
+Extraction is the load-bearing function of the entire harness. The
+quality of every downstream operation — outer fringe computation, goal
+weighting, practice mode selection, session review targeting — is
+bounded by the fidelity of the domain graph. Optimize for analytical
+depth, not throughput.
 
 ---
 
@@ -27,8 +36,8 @@ Read these references before starting:
 
 ## Phase 0: Discover Sources
 
-Accept materials in multiple forms: `background/` files, local paths,
-pasted outlines.
+Accept materials in multiple forms: `background/` files, URLs, local
+paths, pasted outlines.
 
 ### 0a. Scan sources
 
@@ -37,15 +46,24 @@ chapter contents. Produce a **chapter manifest**:
 
 | Field | Value |
 |-------|-------|
-| Source name | e.g., "Fractal Bootcamp Syllabus" |
+| Source name | e.g., "Full Stack Open Part 1" |
 | Chapter title | Top-level division name |
 | File path or page range | Where to find it |
 | Estimated word count | Rough estimate from file size |
+| Sequence position | Order in the source (1, 2, 3...) |
 
 The **chapter** is the extraction unit. It maps to textbook chapters,
 syllabus modules, documentation sections, or equivalent top-level
 divisions. If the source has no chapter structure, treat each major
 heading as a chapter.
+
+Include a **total estimated word count** at the bottom of the manifest
+(sum of per-chapter estimates).
+
+**Preserve chapter boundaries.** Every chapter is its own extraction
+unit, regardless of size. Do not group small adjacent chapters — the
+boundary between chapters is a pedagogical signal (the author chose to
+separate these topics). A 500-word chapter gets its own extraction.
 
 ### 0b. Create state file
 
@@ -55,56 +73,107 @@ Write `domains/.domain-map-state.md` for resume support:
 ---
 domain: <domain-slug>
 phase: discover
+scale: <small|medium|large|very-large|library>
 chapters_total: N
 chapters_completed: []
 started: YYYY-MM-DD
 ---
 
 ## Chapter Manifest
-[manifest table]
+[manifest table with sequence positions]
 ```
 
-### 0c. Present and confirm
+### 0c. Assess scale
 
-Show the manifest to the human. Confirm:
-- Domain slug and name
-- Source coverage — anything missing?
-- Whether cross-reference sources are available (enables Phase 3)
+Classify the source using total estimated word count:
 
-Proceed on human approval.
+| Scale | Total words | Chapters | Quality expectation |
+|-------|------------|----------|-------------------|
+| small | < 30k | 2-4 | Highest — single run, no special handling |
+| medium | 30-100k | 4-12 | High — full pipeline sweet spot |
+| large | 100-200k | 12-30 | Good — flag oversized chapters |
+| very-large | 200-400k | 30-60 | Requires partitioning for full depth |
+| library | 400k+ | 60+ | Requires partitioning |
+
+Record the classification in the state file's `scale` field.
+
+Flag individual chapters that are unusually large:
+- Over 15k words: note that analytical depth may vary; offer to split
+  at section boundaries.
+- Over 50k words: recommend splitting.
+- Over 130k words: require splitting (exceeds raw capacity).
+
+Frame chapter size guidance in plain language: "Chapter 7 is very
+long — I'll get better results if I analyze its sections separately."
+
+### 0d. Present and confirm
+
+Show the manifest, total word count, and scale classification. Then:
+
+**Small or medium:** Confirm domain slug, source coverage, and whether
+cross-reference sources are available (enables Phase 3). Proceed on
+human approval.
+
+**Large:** Same confirmations, plus: note any flagged chapters and
+offer section splitting. If chapter count is under ~30, recommend
+proceeding. If over, suggest a natural starting partition (textbook
+part, course module, or topic boundary visible in the TOC) and note
+that the graph can be extended later with domain-update.
+
+**Very large or library:** Tell the user plainly that the material
+exceeds what one pass can analyze at full depth. Propose a starting
+partition based on the source's own structure. Example framing:
+
+> "This is a large collection — [N chapters, ~Xk words]. The deepest
+> analysis works best on 4-12 chapters at a time. I'd recommend
+> starting with [specific partition based on TOC structure] and
+> building out from there. You can extend the graph later — each new
+> section adds to the same map."
+
+Proceed on the user's chosen scope. Update the state file's
+`chapters_total` to reflect the chosen partition, not the full source.
 
 ---
 
-## Phase 1: Batched Extraction
+## Phase 1: Chapter Analysis
 
-Dispatch sub-agents to extract from chapters. Each sub-agent receives
-its chapter path(s) + the extraction schema from `subagents.md` +
+Dispatch sub-agents to analyze chapters. Each sub-agent receives its
+chapter path(s) + the full analysis protocol from `subagents.md` +
 instruction to read `developmental-model.md` and
 `domain-graph-schema.md` independently.
 
-### Batch allocation
+**The sub-agent's job is analytical, not mechanical.** It reads the
+chapter as a pedagogical unit: understanding what the author is
+teaching, in what order, building on what assumptions, and
+communicating what dependencies through structure. The structured
+extraction comes second, after the analysis.
 
-Maximum concurrent agents per batch: **4**.
+### Dispatch rules
+
+One chapter per sub-agent. Maximum concurrent agents per batch: **4**.
 
 | Manifest shape | Allocation |
 |----------------|------------|
 | 1-4 chapters | Single batch: 1 agent per chapter |
 | 5-8 chapters | 2 sequential batches of <=4 agents |
 | 9-20 chapters | 3-5 sequential batches of <=4 agents |
-| 21+ chapters | Group adjacent small chapters (est. <5k words) into shared agent slots; then batch at <=4 |
+| 21+ chapters | Sequential batches of <=4 agents |
 
 ### Chapter size handling
 
 | Chapter size (est. words) | Action |
 |--------------------------|--------|
-| <2k words | Group with adjacent chapter(s) into one agent slot |
-| 2k-135k words | One agent per chapter (normal case) |
-| >135k words | Split at section boundaries; each section becomes its own agent slot |
+| Up to 15k words | One agent. Full analytical depth. |
+| 15-50k words | One agent. Note to user: depth may vary on longest sections. |
+| 50-130k words | Recommend splitting at section boundaries. Each section gets its own agent slot. Preserve section order metadata. |
+| >130k words | Require splitting. Exceeds raw capacity. |
+
+Small chapters are NOT grouped. Each chapter boundary is a signal.
 
 ### Between batches
 
 Checkpoint progress to `.domain-map-state.md`: update
-`chapters_completed` and `phase: extracting`. Resume reads this file
+`chapters_completed` and `phase: analyzing`. Resume reads this file
 and skips completed chapters.
 
 ### Failure handling
@@ -115,10 +184,70 @@ and skips completed chapters.
 
 ---
 
+## Phase 1.5: Cross-Chapter Analysis
+
+After all chapter analyses complete, dispatch 1-2 cross-chapter
+analyst sub-agents. See `subagents.md § Cross-Chapter Analyst` for the
+dispatch prompt.
+
+Each analyst receives **all chapter extraction reports** (not raw
+sources). Their job: detect relationships that no single-chapter
+extractor can see.
+
+### What cross-chapter analysis detects
+
+1. **Forward references resolved.** Chapter 3's extractor reported
+   "concept X used but not taught here." Cross-chapter analyst finds
+   X was taught in Chapter 1 → creates edge with evidence.
+
+2. **Progressive elaboration.** Same concept at complexity 2 in
+   Chapter 1 and complexity 4 in Chapter 5 → creates altitude
+   dependency edge.
+
+3. **Sequencing-as-dependency.** Chapter order implies prerequisite
+   direction. Cross-chapter analyst validates by checking whether
+   later chapters' code examples use concepts from earlier chapters.
+
+4. **Concept reuse frequency.** Concepts appearing across many
+   chapters are more foundational → flags for threshold consideration.
+
+5. **Arc-level dependencies.** The source's own organizational
+   structure (parts, modules) implies arc-level ordering.
+
+### Allocation
+
+| Chapter count | Cross-chapter agents |
+|--------------|---------------------|
+| 1-6 | 1 agent receives all reports |
+| 7-15 | 1 agent (reports are structured, not raw text) |
+| 16+ | 2 agents with overlapping chapter ranges |
+
+### State update
+
+Update `.domain-map-state.md`: `phase: cross-analysis`.
+
+---
+
 ## Phase 2: Graph Assembly
 
-Main agent merges section extractions. Do not read raw sources — work
-from sub-agent reports only.
+Main agent merges chapter analyses + cross-chapter findings. Do not
+read raw sources — work from sub-agent reports only.
+
+**Assembly is analytical work, not a script.** The merge steps below
+involve judgment calls — semantic deduplication, edge confidence
+promotion, knowing profile ties — that require reasoning in context.
+Do the merge reasoning yourself. Write the result as JSON. Then
+validate structurally by running:
+
+```
+bun run scripts/lib/graph-queries.ts \
+  --graph <output-path> --query coverage
+```
+
+`loadDomainGraph()` checks that all edge targets exist, composition
+links are bidirectional, and required fields are present. It will
+throw on structural errors. Fix any errors it surfaces, then proceed
+to human review. Do not write a build script for assembly.
 
 ### Merge steps
 
@@ -129,15 +258,23 @@ from sub-agent reports only.
      ask.
 
 2. **Edge consolidation.**
-   - Multi-source edges get higher confidence (hypothesized → inferred).
+   - Merge explicit edges (from chapter analysis) with implicit edges
+     (from cross-chapter analysis).
+   - Edges reported by multiple chapter analysts get higher confidence
+     (hypothesized → inferred → confirmed). Two independent analysts
+     reporting the same edge is sufficient for promotion.
+   - Implicit edges corroborated by multiple signal types get promoted.
    - Conflicting edges flagged for human decision.
 
 3. **Complexity range reconciliation.**
-   - Same concept at different levels → range expands (take union).
+   - Same concept at different levels across chapters → range expands
+     (take union).
+   - Progressive elaboration creates altitude dependencies, not just
+     wider ranges.
 
 4. **Knowing profile aggregation.**
    - Modal consensus: for each knowing type, take the most frequent
-     category across sections.
+     category across chapters.
    - Ties → **human decision point**.
 
 5. **Composition tree construction + validation.**
@@ -145,9 +282,10 @@ from sub-agent reports only.
    - Validate: no cycles in composition.
 
 6. **Horizon marking.**
-   - Concepts assumed-but-not-taught across sections → type: "horizon".
-   - These get an ID and description but no complexity range, no
-     prerequisites, no knowing profile.
+   - Concepts with origin "assumed" across all chapters → type:
+     "horizon".
+   - Concepts with origin "used" in some chapters but "taught" in none
+     → likely a coverage gap. Flag for human.
 
 7. **Domain flux annotation.**
    - Based on source age and domain character.
@@ -163,7 +301,7 @@ Update `.domain-map-state.md`: `phase: assembling`.
 
 Only when multiple independent sources were provided in Phase 0.
 
-Run Phase 1-2 against the second source. Compute graph diff:
+Run Phases 1-1.5 against the second source. Compute graph diff:
 
 | Category | Meaning | Action |
 |----------|---------|--------|
@@ -183,10 +321,12 @@ Present decision table to human. Apply approved changes.
 ### Present for review
 
 Show:
-- **Summary stats:** concept count, edge count, arc count, horizon
-  count
+- **Summary stats:** concept count, edge count (explicit vs. implicit),
+  arc count, horizon count
 - **Topology overview** in plain language: arcs, their major concepts,
   key prerequisite chains
+- **Implicit edge summary:** edges detected through structural analysis
+  (co-occurrence, sequencing, refactoring chains) with their evidence
 - **Decision points** accumulated from Phase 2-3
 - **Coverage boundaries:** what the graph covers and what it doesn't
 - **Flux annotation:** classification and cadence
@@ -226,6 +366,7 @@ After human approval:
 - Do not auto-merge ambiguous concept names (present as decision points).
 - Do not write output without human approval.
 - Do not put scores, gaps, or assessment data in the domain graph.
+- Do not group small chapters together — each boundary is a signal.
 
 ---
 
@@ -235,7 +376,7 @@ After human approval:
 |---------|--------|
 | No sources | Exit with guidance on what to provide |
 | Source too large | Segment further; map TOC-level if still too large |
-| Sub-agent fails | Retry once; partial graph from successful sections |
+| Sub-agent fails | Retry once; partial graph from successful chapters |
 | No developmental model | Extract without complexity calibration; note in metadata |
 | Single source only | Skip Phase 3; note single-source in metadata |
 
