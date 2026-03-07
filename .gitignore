@@ -11,3 +11,4 @@ learning/session-logs/*
 background/*
 !background/.gitkeep
 .claude/settings.json
+conversations/
