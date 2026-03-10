@@ -6,6 +6,7 @@ A personal development harness for Claude Code. Run `/intake` to begin.
 
 - `.claude/skills/` — modular capabilities that activate contextually
 - `.claude/references/` — system knowledge (developmental model)
+- `.claude/notepad/` — persistent scratch space (see Notepad below)
 - `background/` — drop materials here before intake for a sharper starting profile
 - `learning/` — created by intake, tracks your development over time
 
@@ -14,6 +15,15 @@ A personal development harness for Claude Code. Run `/intake` to begin.
 This file will be replaced with a personalized configuration. The intake
 interview generates a CLAUDE.md calibrated to your background, goals,
 learning style, and communication preferences.
+
+## Notepad
+
+`notepad/` is a persistent scratch space for your own processing.
+It is not output for the user. Write here when you need to hold
+unresolved structure, think across multiple passes, or accumulate
+observations that aren't ready for conversation. Each note takes
+whatever shape the thought requires. The user may read these but
+they are not addressed to the user.
 
 ## Security — Context Files
 

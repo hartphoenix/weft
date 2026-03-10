@@ -239,10 +239,20 @@ echo "=== Accumulator lifecycle tests ==="
 ACCUMULATOR_FILE="$TMPDIR/test-metaclaude-accumulator"
 rm -f "$ACCUMULATOR_FILE"
 
+# Accumulator read helper (matches observer.sh logic)
+read_accumulator() {
+    awk -v max=500 '{
+        if (len + length + 1 > max) exit
+        if (NR > 1) { printf "\n"; len++ }
+        printf "%s", $0
+        len += length
+    }' "$1"
+}
+
 # Test: first observation — file absent, read returns empty
 ACCUMULATOR=""
 if [ -f "$ACCUMULATOR_FILE" ]; then
-    ACCUMULATOR=$(head -c 500 "$ACCUMULATOR_FILE")
+    ACCUMULATOR=$(read_accumulator "$ACCUMULATOR_FILE")
 fi
 if [ "$ACCUMULATOR" = "" ]; then
     echo "  PASS: first observation reads empty"
@@ -255,7 +265,7 @@ fi
 # Test: write accumulator, read it back
 CONTEXT_CONTENT="user goal: build auth. decided JWT at turn 2."
 printf '%s' "$CONTEXT_CONTENT" > "$ACCUMULATOR_FILE"
-ACCUMULATOR=$(head -c 500 "$ACCUMULATOR_FILE")
+ACCUMULATOR=$(read_accumulator "$ACCUMULATOR_FILE")
 if [ "$ACCUMULATOR" = "$CONTEXT_CONTENT" ]; then
     echo "  PASS: accumulator persists across reads"
     ((PASS++))
@@ -267,7 +277,7 @@ fi
 # Test: overwrite with new content (simulates next turn)
 CONTEXT_CONTENT="user goal: build auth. JWT chosen. now on middleware."
 printf '%s' "$CONTEXT_CONTENT" > "$ACCUMULATOR_FILE"
-ACCUMULATOR=$(head -c 500 "$ACCUMULATOR_FILE")
+ACCUMULATOR=$(read_accumulator "$ACCUMULATOR_FILE")
 if [ "$ACCUMULATOR" = "$CONTEXT_CONTENT" ]; then
     echo "  PASS: accumulator overwrites on update"
     ((PASS++))
@@ -276,15 +286,27 @@ else
     ((FAIL++))
 fi
 
-# Test: >500 byte truncation
-LONG_CONTENT=$(printf 'x%.0s' $(seq 1 600))
+# Test: >500 byte truncation (line-aware, not byte-aware)
+# Write 12 lines of ~50 chars each (600 bytes total). Truncation should
+# drop the last lines that would exceed 500 bytes, not split mid-line.
+LONG_CONTENT=""
+for i in $(seq 1 12); do
+    LONG_CONTENT="${LONG_CONTENT}line $i: $(printf 'x%.0s' $(seq 1 42))
+"
+done
 printf '%s' "$LONG_CONTENT" > "$ACCUMULATOR_FILE"
-ACCUMULATOR=$(head -c 500 "$ACCUMULATOR_FILE")
-if [ ${#ACCUMULATOR} -eq 500 ]; then
-    echo "  PASS: >500 byte content truncated to 500"
+ACCUMULATOR=$(awk -v max=500 '{
+    if (len + length + 1 > max) exit
+    if (NR > 1) { printf "\n"; len++ }
+    printf "%s", $0
+    len += length
+}' "$ACCUMULATOR_FILE")
+ACCUM_LEN=${#ACCUMULATOR}
+if [ "$ACCUM_LEN" -le 500 ] && [ "$ACCUM_LEN" -gt 0 ]; then
+    echo "  PASS: >500 byte content truncated to $ACCUM_LEN (line-aware, <=500)"
     ((PASS++))
 else
-    echo "  FAIL: expected 500 bytes, got ${#ACCUMULATOR}"
+    echo "  FAIL: expected <=500 bytes, got $ACCUM_LEN"
     ((FAIL++))
 fi
 
@@ -294,6 +316,24 @@ if jq -n --arg accumulator "$ACCUMULATOR" '{accumulator: $accumulator}' > /dev/n
     ((PASS++))
 else
     echo "  FAIL: truncated accumulator broke jq"
+    ((FAIL++))
+fi
+
+# Test: multi-byte UTF-8 not split by truncation
+# Write content with multi-byte chars (em dashes, curly quotes) near the boundary
+MULTIBYTE_CONTENT='user goal: build auth — JWT chosen. gap: "correct shape, wrong boundary" pattern active. edge: middleware ordering.'
+printf '%s' "$MULTIBYTE_CONTENT" > "$ACCUMULATOR_FILE"
+ACCUMULATOR=$(awk -v max=500 '{
+    if (len + length + 1 > max) exit
+    if (NR > 1) { printf "\n"; len++ }
+    printf "%s", $0
+    len += length
+}' "$ACCUMULATOR_FILE")
+if jq -n --arg accumulator "$ACCUMULATOR" '{accumulator: $accumulator}' > /dev/null 2>&1; then
+    echo "  PASS: multi-byte UTF-8 accumulator valid in jq"
+    ((PASS++))
+else
+    echo "  FAIL: multi-byte accumulator broke jq (likely split UTF-8)"
     ((FAIL++))
 fi
 
@@ -313,7 +353,7 @@ CONTEXT_CONTENT=""
 if [ -n "$CONTEXT_CONTENT" ]; then
     printf '%s' "$CONTEXT_CONTENT" > "$ACCUMULATOR_FILE"
 fi
-ACCUMULATOR=$(head -c 500 "$ACCUMULATOR_FILE")
+ACCUMULATOR=$(read_accumulator "$ACCUMULATOR_FILE")
 if [ "$ACCUMULATOR" = "existing summary" ]; then
     echo "  PASS: empty context preserves existing accumulator"
     ((PASS++))
