@@ -37,7 +37,7 @@ not the current working directory. If needed, read
       safety bound for misconfigured installs, not a normal case.
 3. Run session-discovery with paths-only output:
    ```bash
-   bun run "$(cat ~/.config/weft/root)/scripts/session-discovery.ts" \
+   bun "$(cat ~/.config/weft/root)/scripts/session-discovery.ts" \
      --since <window-start> --min-user-messages 5 --paths-only
    ```
    If the command fails: report the failure and exit.
@@ -51,7 +51,7 @@ not the current working directory. If needed, read
 For each session in the manifest, run session-extract:
 
 ```bash
-bun run "$(cat ~/.config/weft/root)/scripts/session-extract.ts" <filePath>
+bun "$(cat ~/.config/weft/root)/scripts/session-extract.ts" <filePath>
 ```
 
 If session-extract fails (script not found, bun error, exit non-zero):

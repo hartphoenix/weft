@@ -13,7 +13,7 @@ local machine. Runs a bun script and returns a JSON manifest.
 Run the discovery script from the harness root:
 
 ```bash
-bun run "$(cat ~/.config/weft/root)/scripts/session-discovery.ts" [flags]
+bun "$(cat ~/.config/weft/root)/scripts/session-discovery.ts" [flags]
 ```
 
 ### Flags
@@ -30,16 +30,16 @@ bun run "$(cat ~/.config/weft/root)/scripts/session-discovery.ts" [flags]
 SCRIPT="$(cat ~/.config/weft/root)/scripts/session-discovery.ts"
 
 # Today's sessions
-bun run "$SCRIPT"
+bun "$SCRIPT"
 
 # Sessions since last review
-bun run "$SCRIPT" --since 2026-02-25
+bun "$SCRIPT" --since 2026-02-25
 
 # Only sessions in the roger project
-bun run "$SCRIPT" --project roger
+bun "$SCRIPT" --project roger
 
 # Two-day window, specific project
-bun run "$SCRIPT" --since 2026-02-27 --until 2026-02-28 --project weft-dev
+bun "$SCRIPT" --since 2026-02-27 --until 2026-02-28 --project weft-dev
 ```
 
 ## Output format
@@ -79,7 +79,7 @@ JSON to stdout. Diagnostics to stderr.
 ### 1. Run the script, parse the output
 
 ```bash
-bun run "$(cat ~/.config/weft/root)/scripts/session-discovery.ts" --since <last-review-date> 2>/dev/null
+bun "$(cat ~/.config/weft/root)/scripts/session-discovery.ts" --since <last-review-date> 2>/dev/null
 ```
 
 Parse the JSON from stdout. The `meta` object tells you how many
