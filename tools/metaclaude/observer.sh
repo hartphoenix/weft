@@ -135,7 +135,12 @@ TURN_COUNT=$(echo "$RECENT" | jq '[.[] | select(.role == "user")] | length' 2>/d
 # Read accumulator (empty string if absent or first observation)
 ACCUMULATOR=""
 if [ -f "$ACCUMULATOR_FILE" ]; then
-    ACCUMULATOR=$(head -c 500 "$ACCUMULATOR_FILE")
+    ACCUMULATOR=$(awk -v max=500 '{
+        if (len + length + 1 > max) exit
+        if (NR > 1) { printf "\n"; len++ }
+        printf "%s", $0
+        len += length
+    }' "$ACCUMULATOR_FILE")
 fi
 
 # --- Fingerprint skip: avoid inference when window hasn't changed ---
