@@ -52,12 +52,12 @@ extracted output instead of reading raw JSON. If exit 1, treat as a
 regular JSON file.
 
   # Detection — run --list to check format and triage:
-  bun run "$(cat ~/.config/weft/root)/scripts/conversation-extract.ts" <path> --list
+  bun "$(cat ~/.config/weft/root)/scripts/conversation-extract.ts" <path> --list
 
 This returns a manifest of conversations. Then extract the most
 relevant ones (prioritize recent, substantive conversations):
 
-  bun run "$(cat ~/.config/weft/root)/scripts/conversation-extract.ts" <path> \
+  bun "$(cat ~/.config/weft/root)/scripts/conversation-extract.ts" <path> \
     --min-messages 5 --max-assistant-chars 300
 
 Read the extracted text instead of the raw JSON.

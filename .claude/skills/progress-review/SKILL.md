@@ -77,7 +77,7 @@ Read all data sources. Every source is optional — degrade gracefully.
    day gate passes automatically.
 4. **Run session-discovery** for the review window:
    ```bash
-   bun run "$(cat ~/.config/weft/root)/scripts/session-discovery.ts" --since <window-start>
+   bun "$(cat ~/.config/weft/root)/scripts/session-discovery.ts" --since <window-start>
    ```
    If session-discovery fails (bun not found, script error): warn and
    fall back to session log count for the session gate (step 5). Set
