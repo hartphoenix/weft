@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # MetaClaude Observer — async Stop hook
 # Reads conversation transcript, sends to Context Claude, stages injection.
-# Logs structured per-session observations to weft-dev/meta/.
+# Logs structured per-session observations to weft-dev/metacog/sessions/.
 # Also dual-writes to legacy daily JSONL until migration is verified.
 
 set -euo pipefail
+
+# Portable millisecond timestamp (macOS date lacks %N)
+ms_now() {
+  python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null \
+    || echo $(( $(date +%s) * 1000 ))
+}
 
 MC_DIR="$HOME/.claude/metaclaude"
 STATE_FILE="$MC_DIR/enabled"
@@ -15,7 +21,7 @@ INSTRUCTION_FILE="$MC_DIR/instruction"
 LOG_DIR="$MC_DIR/logs"
 PROMPT_FILE="$(dirname "$0")/prompt.md"
 NOTEPAD_DIR="${METACLAUDE_NOTEPAD_DIR:-$HOME/Documents/GitHub/roger/notepad}"
-META_LOG_DIR="/Users/rhhart/Documents/GitHub/weft-dev/meta"
+META_LOG_DIR="/Users/rhhart/Documents/GitHub/weft-dev/metacog/sessions"
 
 # Read model config
 if [ -f "$MODEL_FILE" ]; then
@@ -23,11 +29,13 @@ if [ -f "$MODEL_FILE" ]; then
     BACKEND=$(jq -r '.backend' "$MODEL_FILE")
     MODEL_NAME=$(jq -r '.name' "$MODEL_FILE")
     OBS_MODE=$(jq -r '.id' "$MODEL_FILE")
+    INFERENCE_URL=$(jq -r '.inference_url // "http://localhost:1234"' "$MODEL_FILE")
 else
     API_MODEL="haiku"
     BACKEND="claude-cli"
     MODEL_NAME="haiku"
     OBS_MODE="mch"
+    INFERENCE_URL="http://localhost:1234"
 fi
 
 mkdir -p "$LOG_DIR"
@@ -87,7 +95,7 @@ fi
 echo "$SESSION_LOG" > "$SESSION_LOG_POINTER"
 
 # --- Track timing ---
-START_TIME=$(date +%s%3N 2>/dev/null || date +%s000)
+START_TIME=$(ms_now)
 
 # Extract recent turns from transcript.
 # Transcript types: user (has .message.content as string),
@@ -167,6 +175,38 @@ if [ "$WINDOW_FINGERPRINT" = "$LAST_FINGERPRINT" ] && [ -n "$ACCUMULATOR" ]; the
     exit 0
 fi
 
+# --- Embedding retrieval (Fast mode) ---
+QUERY_TEXT=$(echo "$RECENT" | jq -r \
+  '[.[] | select(.role == "user") | .content] | .[-3:] | join(" ")' 2>/dev/null)
+
+RETRIEVED_CHUNKS="[]"
+RETRIEVAL_LATENCY=0
+RETRIEVAL_SOURCES=""
+RETRIEVAL_COUNT=0
+RETRIEVAL_ERROR=""
+QUERY_SCRIPT="$(dirname "$0")/embedding/query.ts"
+
+if [ -n "$QUERY_TEXT" ] && [ ${#QUERY_TEXT} -gt 10 ]; then
+    RETR_START=$(ms_now)
+    RETR_ERR_FILE="${TMPDIR:-/private/tmp/claude-501}/mc_retr_err_$$"
+    if RETR_RAW=$(bun "$QUERY_SCRIPT" --json --top 3 --threshold 0.65 \
+                  "$QUERY_TEXT" 2>"$RETR_ERR_FILE"); then
+        if echo "$RETR_RAW" | jq 'type == "array"' 2>/dev/null | grep -q true; then
+            RETRIEVED_CHUNKS="$RETR_RAW"
+            RETRIEVAL_COUNT=$(echo "$RETR_RAW" | jq 'length')
+            RETRIEVAL_SOURCES=$(echo "$RETR_RAW" | jq -r \
+              '.[] | capture("\\[Retrieved from (?<s>[^]\\n—]+)") | .s' \
+              2>/dev/null | sort -u | paste -sd, -)
+        fi
+    else
+        RETRIEVAL_ERROR=$(cat "$RETR_ERR_FILE" 2>/dev/null)
+        [ -z "$RETRIEVAL_ERROR" ] && RETRIEVAL_ERROR="retrieval_failed (exit $?)"
+    fi
+    rm -f "$RETR_ERR_FILE"
+    RETR_END=$(ms_now)
+    RETRIEVAL_LATENCY=$(( RETR_END - RETR_START ))
+fi
+
 # Notepad file list — disabled until embedding index provides
 # relevance-filtered context. Sending the full list every turn
 # caused the model to fixate on notepad regardless of relevance.
@@ -198,20 +238,23 @@ USER_MESSAGE=$(jq -n \
     --argjson recent "$RECENT" \
     --argjson turn_count "$TURN_COUNT" \
     --arg accumulator "$ACCUMULATOR" \
-    '{recent_turns: $recent, user_turn_count: $turn_count, accumulator: $accumulator}')
+    --argjson retrieved "$RETRIEVED_CHUNKS" \
+    '{recent_turns: $recent, user_turn_count: $turn_count,
+     accumulator: $accumulator, retrieved_chunks: $retrieved}')
 
 # --- Inference ---
+INFERENCE_START=$(ms_now)
 INFERENCE_ERROR=""
 RAW_RESPONSE=""
 if [ "$BACKEND" = "lmstudio" ]; then
     if ! RAW_RESPONSE=$(curl -s --max-time 30 \
-        http://localhost:1234/v1/chat/completions \
+        "$INFERENCE_URL/v1/chat/completions" \
         -H "Content-Type: application/json" \
         -d "$(jq -n \
             --arg model "$API_MODEL" \
             --arg system "$SYSTEM_PROMPT" \
             --arg user "$USER_MESSAGE" \
-            '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}], temperature: 0.7}'
+            '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}], temperature: 0.7, response_format: {type: "json_object"}}'
         )" 2>&1); then
         INFERENCE_ERROR="$RAW_RESPONSE"
         RAW_RESPONSE=""
@@ -254,7 +297,10 @@ if [ -n "$RAW_RESPONSE" ]; then
     CLEAN_RESPONSE=$(printf '%s' "$FULL_RESPONSE" | perl -0777 -pe 's/<think>.*?<\/think>\s*//gs; s/<thinking>.*?<\/thinking>\s*//gs; s/<think>.*\z//gs; s/<thinking>.*\z//gs')
 fi
 
-END_TIME=$(date +%s%3N 2>/dev/null || date +%s000)
+INFERENCE_END=$(ms_now)
+INFERENCE_LATENCY=$(( INFERENCE_END - INFERENCE_START ))
+
+END_TIME=$(ms_now)
 LATENCY_MS=$(( END_TIME - START_TIME ))
 
 # --- Derive turn number ---
@@ -274,38 +320,26 @@ if [ -n "$INFERENCE_ERROR" ]; then
 fi
 
 # --- Parse structured response ---
-# Format: <inject>...</inject> <context>...</context>
-# Tested at 5/5 compliance on Qwen3-8B. Fallback: if no tags found,
-# treat entire response as injection (pre-accumulator behavior).
+# Format: JSON {"inject": "...", "context": "..."}
+# inject is null for silence. response_format guarantees valid JSON from LM Studio.
+# Fallback: if response isn't valid JSON, treat entire response as injection.
 INJECT_CONTENT=""
 CONTEXT_CONTENT=""
-PARSE_SUCCESS=false
 
-# Extract content between tags (handles multiline, leading/trailing whitespace)
-if printf '%s' "$CLEAN_RESPONSE" | grep -qi '<inject>'; then
-    INJECT_CONTENT=$(printf '%s' "$CLEAN_RESPONSE" | perl -0777 -ne 'print $1 if /<inject>(.*?)<\/inject>/si')
-    PARSE_SUCCESS=true
-fi
-
-if printf '%s' "$CLEAN_RESPONSE" | grep -qi '<context>'; then
-    CONTEXT_CONTENT=$(printf '%s' "$CLEAN_RESPONSE" | perl -0777 -ne 'print $1 if /<context>(.*?)<\/context>/si')
-fi
-
-# Fallback: no <inject> tag → entire response is injection
-if [ "$PARSE_SUCCESS" = "false" ]; then
+if echo "$CLEAN_RESPONSE" | jq empty 2>/dev/null; then
+    INJECT_CONTENT=$(echo "$CLEAN_RESPONSE" | jq -r '.inject // empty')
+    CONTEXT_CONTENT=$(echo "$CLEAN_RESPONSE" | jq -r '.context // empty')
+else
+    # Fallback: not valid JSON → entire response is injection
     INJECT_CONTENT="$CLEAN_RESPONSE"
     CONTEXT_CONTENT=""
 fi
 
-# Trim whitespace including leading/trailing newlines (perl -0777 treats as single string)
+# Trim whitespace
 INJECT_CONTENT=$(printf '%s' "$INJECT_CONTENT" | perl -0777 -pe 's/\A\s+//; s/\s+\z//')
 CONTEXT_CONTENT=$(printf '%s' "$CONTEXT_CONTENT" | perl -0777 -pe 's/\A\s+//; s/\s+\z//')
 
-# Apply silence sentinel
 TRIMMED="$INJECT_CONTENT"
-if [ "$TRIMMED" = "[no comment]" ]; then
-    TRIMMED=""
-fi
 
 # Determine decision
 if [ -n "$TRIMMED" ] && [ "$TRIMMED" != "null" ]; then
@@ -336,7 +370,6 @@ fi
 
 # --- Structured session log entry ---
 CTX_TURNS=$(echo "$RECENT" | jq 'length' 2>/dev/null || echo 0)
-USER_MSG_LOG=$(printf '%.2000s' "$USER_MESSAGE")
 
 jq -n \
     --argjson turn "$TURN" \
@@ -349,7 +382,8 @@ jq -n \
     --arg decision "$DECISION" \
     --arg content "$INJECTION_CONTENT" \
     --arg full_resp "$FULL_RESPONSE" \
-    --arg user_msg "$USER_MSG_LOG" \
+    --arg system_prompt "$SYSTEM_PROMPT" \
+    --arg user_msg "$USER_MESSAGE" \
     --arg sid "$SESSION_ID" \
     --arg cwd "$CWD" \
     --arg perm "$PERMISSION_MODE" \
@@ -357,6 +391,11 @@ jq -n \
     --arg stop_active "$STOP_HOOK_ACTIVE" \
     --arg last_msg "$LAST_ASSISTANT_MSG" \
     --argjson inf_meta "$INFERENCE_META" \
+    --argjson retr_latency "$RETRIEVAL_LATENCY" \
+    --argjson retr_count "$RETRIEVAL_COUNT" \
+    --arg retr_sources "$RETRIEVAL_SOURCES" \
+    --arg retr_error "$RETRIEVAL_ERROR" \
+    --argjson inf_latency "$INFERENCE_LATENCY" \
     --arg accumulator_in "$ACCUMULATOR" \
     --arg accumulator_out "$CONTEXT_CONTENT" \
     '{type:"observation", turn:$turn, timestamp:$ts, mode:$obs_mode, model_name:$model_name,
@@ -364,10 +403,15 @@ jq -n \
       hook_event_name:$hook_event, stop_hook_active:$stop_active,
       last_assistant_message:$last_msg,
       context_window:{transcript_turns_used:$ctx_turns, user_turns:$user_turns},
-      pipeline:{inference_1:{purpose:"assess_and_decide", latency_ms:$latency, metadata:$inf_meta}},
+      pipeline:{
+        retrieval:{latency_ms:$retr_latency, chunk_count:$retr_count, sources:$retr_sources}
+          + if $retr_error != "" then {error:$retr_error} else {} end,
+        inference_1:{purpose:"assess_and_decide", latency_ms:$inf_latency, metadata:$inf_meta}
+      },
       decision:$decision,
       accumulator_in:$accumulator_in,
       accumulator_out:$accumulator_out,
+      system_prompt:$system_prompt,
       full_response:$full_resp,
       user_message:$user_msg,
       total_latency_ms:$latency}
