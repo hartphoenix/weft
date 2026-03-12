@@ -78,16 +78,7 @@ const pathsOnly = args["paths-only"] ?? false;
 const sinceISO = `${sinceDate}T00:00:00.000Z`;
 const untilISO = `${untilDate}T23:59:59.999Z`;
 
-// --- Path decoding ---
-
-function decodeProjectPath(encoded: string): string {
-  // Encoding scheme: leading / becomes leading -, then all / become -
-  // So "-Users-rhhart-Documents-GitHub-weft-dev" → "/Users/rhhart/Documents/GitHub/weft-dev"
-  if (encoded.startsWith("-")) {
-    return "/" + encoded.slice(1).replace(/-/g, "/");
-  }
-  return encoded.replace(/-/g, "/");
-}
+// --- Path extraction from JSONL ---
 
 // --- JSONL reading ---
 
@@ -157,7 +148,11 @@ function parseSchemaVersion(jsonLine: string): string | null {
 
 // --- First prompt extraction ---
 
-async function extractFirstPrompt(filePath: string): Promise<{ prompt: string; branch: string | null }> {
+async function extractSessionMeta(filePath: string): Promise<{
+  prompt: string;
+  branch: string | null;
+  cwd: string | null;
+}> {
   const noisePatterns = [
     /^<ide_opened_file>/,
     /^<system-reminder>/,
@@ -171,6 +166,7 @@ async function extractFirstPrompt(filePath: string): Promise<{ prompt: string; b
     const text = await file.text();
     const lines = text.split("\n");
     let branch: string | null = null;
+    let cwd: string | null = null;
 
     for (const line of lines) {
       if (!line.trim()) continue;
@@ -180,6 +176,9 @@ async function extractFirstPrompt(filePath: string): Promise<{ prompt: string; b
       } catch {
         continue;
       }
+
+      // Extract cwd from any line that has it
+      if (!cwd && msg.cwd) cwd = msg.cwd;
 
       if (msg.type !== "user") continue;
       if (!branch && msg.gitBranch) branch = msg.gitBranch;
@@ -196,12 +195,12 @@ async function extractFirstPrompt(filePath: string): Promise<{ prompt: string; b
         const trimmed = text.trim();
         if (!trimmed) continue;
         if (noisePatterns.some((p) => p.test(trimmed))) continue;
-        return { prompt: trimmed.slice(0, 120), branch };
+        return { prompt: trimmed.slice(0, 120), branch, cwd };
       }
     }
-    return { prompt: "(no user prompt found)", branch };
+    return { prompt: "(no user prompt found)", branch, cwd };
   } catch {
-    return { prompt: "(error reading file)", branch: null };
+    return { prompt: "(error reading file)", branch: null, cwd: null };
   }
 }
 
@@ -266,21 +265,12 @@ async function main() {
     process.exit(1);
   }
 
-  // Filter by project name if requested
-  const filteredDirs = projectFilter
-    ? projectDirs.filter((d) => {
-        const decoded = decodeProjectPath(d).toLowerCase();
-        return decoded.includes(projectFilter);
-      })
-    : projectDirs;
-
   console.error(
-    `[session-discovery] Scanning ${filteredDirs.length} project(s) for sessions between ${sinceDate} and ${untilDate}`
+    `[session-discovery] Scanning ${projectDirs.length} project(s) for sessions between ${sinceDate} and ${untilDate}`
   );
 
-  for (const projDir of filteredDirs) {
+  for (const projDir of projectDirs) {
     const projPath = join(projectsDir, projDir);
-    const decodedProject = decodeProjectPath(projDir);
 
     let files: string[];
     try {
@@ -315,12 +305,18 @@ async function main() {
 
       if (!sessionOverlapsWindow(startTs, endTs)) continue;
 
-      const { prompt, branch } = await extractFirstPrompt(filePath);
+      const { prompt, branch, cwd } = await extractSessionMeta(filePath);
       const { total, user } = await countMessages(filePath);
+
+      // Use cwd from JSONL as the real project path (directory encoding is lossy)
+      const project = cwd ?? projDir;
+
+      // Apply project filter against the real path
+      if (projectFilter && !project.toLowerCase().includes(projectFilter)) continue;
 
       sessions.push({
         sessionId: basename(file, ".jsonl"),
-        project: decodedProject,
+        project,
         projectEncoded: projDir,
         filePath,
         start: startTs ?? "(unknown)",
