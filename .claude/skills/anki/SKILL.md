@@ -20,6 +20,10 @@ Read the config file at `.claude/anki.local.md` to get the Mochi API key and dec
 
 Available decks: code, ai, design, product, eg_domain, crypto, philosophy, meditation, miscellaneous.
 
+## Learned Patterns
+
+**Before generating cards**, read `.claude/skills/anki/anki-patterns.md`. This file contains patterns learned from previous card reviews — cards that were skipped, edits that were made, and style preferences. Apply these patterns when drafting cards to avoid repeating mistakes.
+
 ## When to Trigger Proactively
 
 Suggest anki cards when you notice:
@@ -126,6 +130,38 @@ After creating each card, confirm success or report errors.
 
 After all cards are created, give a short summary:
 > "Added 3 cards to Code deck, 1 to AI deck."
+
+### Step 5: Learn from Feedback
+
+After the summary, analyze the skips and edits from this session and update `.claude/skills/anki/anki-patterns.md`.
+
+**For skipped cards:** Look at the card and infer why it was skipped. Common reasons:
+- Too basic / already known
+- Too vague or broad
+- Pure definition recall (no deeper understanding tested)
+- Redundant with another card
+- Not worth memorizing
+
+**For edited cards:** Compare the original and final version. Extract the pattern:
+- What was wrong with the original? (too wordy, wrong framing, too abstract, missing example)
+- What did the edit fix? (shorter back, more specific question, added code snippet, reframed as "when would you" instead of "what is")
+
+**How to update the file:** Append concise, actionable patterns under the appropriate section. Don't duplicate existing patterns — if a pattern already exists, reinforce it with a tally or skip it. Keep each pattern to one line.
+
+Example entries:
+```
+## Anti-patterns
+- Pure "what is X" definition cards get skipped — reframe as mechanism or application
+- Cards with 3+ line backs get edited down — keep to 1-2 lines max
+- Avoid cards on syntax Aaron already uses fluently (e.g., basic array methods)
+
+## Preferred style
+- "When would you..." and "Why does..." framings preferred over "What is..."
+- Include a short code snippet on the back when the concept is syntactic
+- Reference the specific debugging context that triggered the card
+```
+
+If there were no skips or edits, skip this step entirely.
 
 ## Guidelines
 
