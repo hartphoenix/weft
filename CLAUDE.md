@@ -53,3 +53,10 @@ If a tool call fails, a hook blocks a command, a git operation produces
 unexpected output, or a file is missing or has unexpected content: pause
 before attempting any workaround and tell the user what you expected vs.
 what you found. Do not silently work around surprises.
+
+## Provenance
+
+When creating a new artifact (plan, doc, design, spec), stamp it with
+`/thischat --stamp <file>`. For auto-read frontmatter files (SKILL.md,
+CLAUDE.md, memory files), use `--back` instead. Skip for configs, temp
+files, and generated code.
