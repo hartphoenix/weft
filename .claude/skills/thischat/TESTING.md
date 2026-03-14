@@ -175,6 +175,19 @@ Try to use `/thischat` as a skill in this conversation. Verify:
 Record: skill loaded (yes/no), command constructed (yes/no), session
 path returned (yes/no).
 
+### 12. Provenance convention
+
+Check whether the user's global CLAUDE.md (`~/.claude/CLAUDE.md`)
+contains a provenance stamping directive (look for `/thischat --stamp`
+or "Provenance" section). If it does not, ask the user:
+
+> "thischat can automatically stamp new artifacts with session provenance
+> if you add a directive to your global CLAUDE.md. Want me to add it?
+> (See the README's 'Enabling automatic stamping' section for what gets
+> added.)"
+
+Record: directive already present (yes/no), user chose to add (yes/no/skipped).
+
 ## Report generation
 
 After all checks, generate a markdown report:
@@ -202,6 +215,7 @@ After all checks, generate a markdown report:
 | 9 | Session archive dry run | PASS/FAIL | ... |
 | 10 | Cron job installation | PASS/FAIL | ... |
 | 11 | Skill invocation | PASS/FAIL | ... |
+| 12 | Provenance convention | PASS/SKIP | ... |
 
 ### Failures (if any)
 

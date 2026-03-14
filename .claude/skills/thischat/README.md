@@ -144,6 +144,23 @@ session logs but skips the retro-stamping pass (archive-only mode).
   memory files) → `/thischat --stamp <file> --back`
 - **Skip:** configs, temp files, generated code
 
+### Enabling automatic stamping
+
+For Claude to stamp artifacts without being asked each time, add the
+convention to your global CLAUDE.md (`~/.claude/CLAUDE.md`):
+
+```markdown
+## Provenance
+
+When creating a new artifact (plan, doc, design, spec), stamp it with
+`/thischat --stamp <file>`. For auto-read frontmatter files (SKILL.md,
+CLAUDE.md, memory files), use `--back` instead. Skip for configs, temp
+files, and generated code.
+```
+
+Weft harness users get this automatically (it's in weft's CLAUDE.md).
+Standalone users should add it manually if they want the convention.
+
 ## Config files
 
 | File | Purpose |
