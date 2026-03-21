@@ -1,13 +1,13 @@
 ---
 name: thischat
 description: Returns the file path of the current session's JSONL log. With --stamp, adds provenance (session path + timestamp) to a file as YAML frontmatter (default) or HTML comment (--back). Use when a skill or agent needs to reference or annotate the current conversation's log file.
-allowed-tools: Bash(bun "$(cat ~/.config/weft/root)/scripts/thischat.ts" *)
+allowed-tools: Bash(bun "$(cat ~/.config/weft/root)/.claude/skills/thischat/thischat.ts" *)
 ---
 
 # thischat
 
 ```bash
-SCRIPT="$(cat ~/.config/weft/root)/scripts/thischat.ts"
+SCRIPT="$(cat ~/.config/weft/root)/.claude/skills/thischat/thischat.ts"
 
 bun "$SCRIPT" --prompt '<first 80 chars of user first message>'
 bun "$SCRIPT" --prompt '...' --stamp path/to/file          # YAML frontmatter (default)
