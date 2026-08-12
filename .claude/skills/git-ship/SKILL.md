@@ -73,12 +73,16 @@ Options: **Push** / **Abort**. On abort, stop.
 
 After confirmation:
 - `git push -u origin <branch>`
-- `gh pr create` — inferred title from branch name and commits, brief
-  body summarizing changes. Report URL.
+- `bun /Users/rhhart/Documents/GitHub/weft/scripts/ghx.ts create <owner/repo> <branch> <default-branch> "<title>" "<body>"`
+  — inferred title from branch name and commits, brief body summarizing
+  changes. Report the returned URL.
+  (`gh pr create` is a fallback only — the sandbox's keychain deny rule
+  breaks Go's TLS verification for `gh`'s API calls; see
+  `.claude/references/ghx-shim.md` for the root cause.)
 
 ### 6. Merge (--merge flag only)
 
-- `gh pr merge --squash --delete-branch`
+- `bun /Users/rhhart/Documents/GitHub/weft/scripts/ghx.ts merge <owner/repo> <pr#> --squash --delete-branch`
 - If merge fails (checks pending, review required): report status, stop
 - After merge: `git checkout <default-branch> && git pull origin <default-branch>`
 
